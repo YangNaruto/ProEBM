@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class Swish(torch.autograd.Function):
 	@staticmethod
 	def forward(ctx, i):

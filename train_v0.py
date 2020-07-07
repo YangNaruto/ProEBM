@@ -24,7 +24,6 @@ sigma = 1e-2  # decrease until training is unstable
 t.manual_seed(seed)
 if t.cuda.is_available():
 	t.cuda.manual_seed_all(seed)
-
 noise = lambda x: x + sigma * t.randn_like(x)
 sqrt = lambda x: int(t.sqrt(t.Tensor([x])))
 
@@ -38,7 +37,7 @@ class ProgressiveEBM(object):
 		self.device = t.device(args.device if torch.cuda.is_available() else 'cpu')
 		self.ebm = networks.Discriminator(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
 		                                  projection=args.projection, activation_fn=args.activation_fn,
-		                                  from_rgb_activate=args.from_rgb_activate).to(self.device)
+		                                  from_rgb_activate=args.from_rgb_activate, bn=args.bn).to(self.device)
 		self.args = args
 		self.truncation = args.truncation
 		self.min_step, self.max_step = int(math.log2(args.init_size)) - 2, int(math.log2(args.max_size)) - 2
@@ -96,26 +95,31 @@ class ProgressiveEBM(object):
 		if step == self.min_step or not self.progressive:
 			step_list = range(step, step + 1)
 		else:
-			step_list = range(self.min_step, step + 1) if from_beginning else range(step - 1, step + 1)
+			if from_beginning:
+				step_list = range(self.min_step, step + 1)
+			else:
+				step_list = range(step - 1, step + 1) if alpha < 1 or self.noise_ratio < 1 else range(step, step+1)
 
-		initial = self.args.initial if self.args.noise_ratio == 1.0 else 'gaussian'
+		# initial = self.args.initial if self.args.noise_ratio == 1.0 else 'gaussian'
 		step_list = list(step_list)
 		x_k.requires_grad_(True)
 		for index, s in enumerate(step_list):
 			if index != 0:
+				# x_k = self.ebm.norm[s](x_k)
 				x_k = F.interpolate(x_k, scale_factor=2, mode='nearest')
 				x_k = (1 - self.noise_ratio * alphas[s]) * x_k + \
-				      self.noise_ratio * alphas[s] * self.sample_p_0(x_k.shape[0], x_k.shape[-1], n_ch=3, initial=initial)
-				x_k = self.ebm.norm[s](x_k)
-				x_k = torch.clamp(x_k, -self.val_clip, self.val_clip)
+				      self.noise_ratio * alphas[s] * self.sample_p_0(x_k.shape[0], x_k.shape[-1], n_ch=3, initial=self.args.initial)
 
-			langevin_steps = int(sampler_step / len(step_list))
+				# x_k = torch.clamp(x_k, -self.val_clip, self.val_clip)
+
+			# langevin_steps = int(sampler_step / len(step_list))
+			langevin_steps = sampler_step
 
 			for k in range(langevin_steps):
 				f_prime = t.autograd.grad(self.ebm(x_k, step=s, alpha=alphas[s], label=label).sum(), [x_k], retain_graph=True)[0]
 				lr = self.cyclic(langevin_steps, k) if self.args.cyclic else self.args.langevin_lr
 				x_k.data += lr * f_prime + 1e-2 * t.randn_like(x_k)
-				x_k.data.clamp_(-self.val_clip, self.val_clip)
+				# x_k.data.clamp_(-self.val_clip, self.val_clip)
 
 		return x_k.detach()
 
@@ -167,7 +171,8 @@ class ProgressiveEBM(object):
 			if not os.path.exists(path):
 				os.makedirs(path)
 		samples = []
-		for _ in range(20_000 // batch_size):
+		self.ebm.eval()
+		for _ in range(30_000 // batch_size):
 			x_k = self.sample_p_0(bs=batch_size, im_sz=im_size, initial=args.initial)
 			sample = self.langevin_sampler(x_k=x_k, sampler_step=sampler_step, step=step, alpha=alpha)
 			samples.append(self.normalize_tensor(sample).cpu())
@@ -199,8 +204,9 @@ class ProgressiveEBM(object):
 		final_progress = False
 
 		total_used_samples = 0
-
+		interval = 2000
 		for i in range(1_000_000):
+			self.ebm.train()
 			self.ebm.zero_grad()
 			alpha = min(1, 1 / args.phase * (used_sample + 1))
 
@@ -228,7 +234,8 @@ class ProgressiveEBM(object):
 					alpha = 0
 
 				resolution = 4 * 2 ** step
-
+				if resolution > 32:
+					interval = 5000
 				loader = self.sample_data(
 					dataset, args.batch.get(resolution, args.batch_default), resolution
 				)
@@ -259,14 +266,21 @@ class ProgressiveEBM(object):
 			if step == self.min_step or not self.progressive:
 				im_size = self.resolution[self.min_step]
 			else:
-				im_size = self.resolution[self.min_step] if args.from_beginning else self.resolution[step - 1]
+				if args.from_beginning:
+					im_size = self.resolution[self.min_step]
+				else:
+					im_size = self.resolution[step - 1] if alpha < 1 or self.noise_ratio < 1 else self.resolution[step]
 
 			x_k = self.sample_p_0(bs=b_size, im_sz=im_size, initial=args.initial)
 			x_q = self.langevin_sampler(x_k=x_k, sampler_step=args.langevin_step, step=step, alpha=alpha, from_beginning=args.from_beginning)
 
-			pos_energy = self.ebm(x_p_d, step=step, alpha=alpha, label=real_label).mean()
-			neg_energy = self.ebm(x_q, step=step, alpha=alpha, label=fake_label).mean()
-
+			x = torch.cat((x_p_d, x_q), dim=0)
+			label = torch.cat((real_label, fake_label), dim=0) if args.conditional else None
+			energy = self.ebm(x, step=step, alpha=alpha, label=label)
+			# print(energy.shape)
+			pos_energy, neg_energy = [e.mean() for e in torch.split(energy, [x_k.shape[0], x_q.shape[0]])]
+			# pos_energy = self.ebm(x_p_d, step=step, alpha=alpha, label=real_label).mean()
+			# neg_energy = self.ebm(x_q, step=step, alpha=alpha, label=fake_label).mean()
 			L = pos_energy - neg_energy
 			self.optimizer.zero_grad()
 			(-L).backward()
@@ -275,9 +289,9 @@ class ProgressiveEBM(object):
 				print('Itr: {:>6d} Kimg: {:>8d}, Alpha: {:>3.2f}, Res: {:>3d}, f(x_p_d)={:8.4f} f(x_q)={:>8.4f}'.
 				      format(i, total_used_samples // 1000, alpha, resolution, pos_energy, neg_energy))
 				self.plot(os.path.join(save_path, '{:>06d}_q.png'.format(i)), x_q)
-				if i % 2000 == 0 and i != 0:
+				if i % interval == 0 and i != 0:
 					print('Calculate FID...')
-
+					self.ebm.eval()
 					fid_score = self.calculate_fid(stats_path=args.stats_path, im_size=im_size, sampler_step=args.langevin_step, step=step, alpha=alpha)
 					print(f"Itr: {i:>6d}, FID:{fid_score:>10.3f}")
 					torch.save(
@@ -290,7 +304,7 @@ class ProgressiveEBM(object):
 						},
 						f'{save_path}/train_step-{i}.model',
 					)
-
+					self.ebm.train()
 		return
 
 
@@ -301,6 +315,7 @@ if __name__ == "__main__":
 	parser.add_argument('--phase', type=int, default=600_000, help='number of samples used for each training phases')
 	parser.add_argument('--device', type=str, default='0')
 	parser.add_argument('--spectral', action='store_true', default=False, help="add spectral normalization")
+	parser.add_argument('--bn', action='store_true', default=False, help="add split batch normalization")
 	parser.add_argument('--conditional', action='store_true', default=False, help="add spectral normalization")
 	parser.add_argument('--mode', type=str, default='train', help="train/eval")
 	parser.add_argument('--lr', default=0.0001, type=float, help='learning rate')
@@ -377,7 +392,7 @@ if __name__ == "__main__":
 			args.lr = {}
 			args.batch = {}
 		args.batch_default = 50
-		args.lr_default = 1e-3
+		args.lr_default = 1e-4
 		print(args)
 		trainer = ProgressiveEBM(args)
 		trainer.train(args, dataset, run_dir, load=args.load, ckpt_name=args.ckpt)

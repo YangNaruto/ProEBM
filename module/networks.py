@@ -7,8 +7,8 @@ from torch.autograd import Function
 from torch.nn.utils import spectral_norm
 from math import sqrt
 import math
-import random
 from .split_bn import SplitBatchNorm2d
+from .swish import Swish
 
 
 def init_linear(linear):
@@ -186,7 +186,8 @@ class EqualConv2d(nn.Module):
 
 		conv = nn.Conv2d(*args, **kwargs)
 		conv.weight.data.normal_()
-		conv.bias.data.zero_()
+		if conv.bias is not None:
+			conv.bias.data.zero_()
 		self.conv = equal_lr(conv)
 
 	def forward(self, input):
@@ -239,7 +240,6 @@ class ConvBlock(nn.Module):
 
 		self.conv1 = nn.Sequential(
 			EqualConv2d(in_channel, out_channel, kernel1, padding=pad1),
-			self.activation,
 		)
 
 		if downsample:
@@ -247,7 +247,6 @@ class ConvBlock(nn.Module):
 				self.conv2 = nn.Sequential(
 					# Blur(out_channel),
 					FusedDownsample(out_channel, out_channel, kernel2, padding=pad2),
-					self.activation,
 				)
 
 			else:
@@ -255,24 +254,26 @@ class ConvBlock(nn.Module):
 					# Blur(out_channel),
 					EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
 					nn.AvgPool2d(2),
-					self.activation,
 				)
 
 		else:
 			self.conv2 = nn.Sequential(
 				EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
-				self.activation,
 			)
 
 		self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
+		# self.skip = EqualConv2d(in_channel, out_channel, 1, stride=2, padding=0, bias=False)
 
 	def forward(self, input, res=True):
 		out = self.conv1(input)
+		out = self.activation(out)
+
 		out = self.conv2(out)
 		if res:
 			skip = self.skip(input)
 			out = (skip + out ) / math.sqrt(2)
 
+		out = self.activation(out)
 		return out
 
 
@@ -287,8 +288,13 @@ class BNConvBlock(nn.Module):
 			padding2=None,
 			downsample=False,
 			fused=False,
+			activation_fn='lrelu'
 	):
 		super().__init__()
+		if activation_fn=='lrelu':
+			self.activation = nn.LeakyReLU(0.2)
+		else:
+			self.activation = nn.GELU()
 
 		pad1 = padding
 		pad2 = padding
@@ -302,7 +308,6 @@ class BNConvBlock(nn.Module):
 
 		self.conv1 = nn.Sequential(
 			EqualConv2d(in_channel, out_channel, kernel1, padding=pad1),
-			nn.LeakyReLU(0.2),
 		)
 
 		if downsample:
@@ -310,7 +315,7 @@ class BNConvBlock(nn.Module):
 				self.conv2 = nn.Sequential(
 					# Blur(out_channel),
 					FusedDownsample(out_channel, out_channel, kernel2, padding=pad2),
-					nn.LeakyReLU(0.2),
+
 				)
 
 			else:
@@ -318,27 +323,30 @@ class BNConvBlock(nn.Module):
 					# Blur(out_channel),
 					EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
 					nn.AvgPool2d(2),
-					nn.LeakyReLU(0.2),
+
 				)
 
 		else:
 			self.conv2 = nn.Sequential(
 				EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
-				nn.LeakyReLU(0.2),
+
 			)
 		self.bn1 = SplitBatchNorm2d(in_channel)
 		self.bn2 = SplitBatchNorm2d(out_channel)
+		# self.skip = EqualConv2d(in_channel, out_channel, 1, stride=2, padding=0, bias=False)
 		self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
 
 	def forward(self, input, res=True):
 		out = self.conv1(input)
 		out = self.bn1(out)
+		out = self.activation(out)
+
 		out = self.conv2(out)
 		out = self.bn2(out)
 		if res:
 			skip = self.skip(input)
 			out = (skip + out ) / math.sqrt(2)
-
+		out = self.activation(out)
 		return out
 
 
@@ -382,7 +390,6 @@ class SNConvBlock(nn.Module):
 				self.conv2 = nn.Sequential(
 					# Blur(out_channel),
 					FusedDownsample(out_channel, out_channel, kernel2, padding=pad2),
-					self.activation,
 				)
 
 			else:
@@ -390,68 +397,28 @@ class SNConvBlock(nn.Module):
 					# Blur(out_channel),
 					spectral_norm(nn.Conv2d(out_channel, out_channel, kernel2, padding=pad2)),
 					nn.AvgPool2d(2),
-					self.activation,
 				)
 
 		else:
 			self.conv2 = nn.Sequential(
 				spectral_norm(nn.Conv2d(out_channel, out_channel, kernel2, padding=pad2)),
-				self.activation,
 			)
-
+		# self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
 		self.skip = nn.Sequential(spectral_norm(nn.Conv2d(in_channel, out_channel, 1)), nn.AvgPool2d(2))
+		# self.skip = lambda x: F.interpolate(x, scale_factor=0.5, mode='bilinear', align_corners=False)
 
-	def forward(self, input, res=True):
+	def forward(self, input: torch.Tensor, res=True):
 		out = self.conv1(input)
+		out = self.activation(out)
+
 		out = self.conv2(out)
+		out = self.activation(out)
 		if res:
 			skip = self.skip(input)
 			out = (skip + out ) / math.sqrt(2)
 
 		return out
 
-
-class NoiseInjection(nn.Module):
-	def __init__(self, channel):
-		super().__init__()
-
-		self.weight = nn.Parameter(torch.zeros(1, channel, 1, 1), requires_grad=True)
-
-	def forward(self, image, noise):
-		return image + self.weight * noise
-
-
-class ConstantInput(nn.Module):
-	def __init__(self, channel, size=4):
-		super().__init__()
-
-		self.input = nn.Parameter(torch.randn(1, channel, size, size), requires_grad=True)
-
-	def forward(self, x):
-		batch = x.shape[0]
-		out = self.input.repeat(batch, 1, 1, 1)
-
-		return out
-
-
-class AdaptiveInstanceNorm(nn.Module):
-	def __init__(self, in_channel, style_dim):
-		super().__init__()
-
-		self.norm = nn.InstanceNorm2d(in_channel)
-		self.style = EqualLinear(style_dim, in_channel * 2)
-
-		self.style.linear.bias.data[:in_channel] = 1
-		self.style.linear.bias.data[in_channel:] = 0
-
-	def forward(self, input, style):
-		style = self.style(style).unsqueeze(2).unsqueeze(3)
-		gamma, beta = style.chunk(2, 1)
-
-		out = self.norm(input)
-		out = gamma * out + beta
-
-		return out
 
 
 class Attention(nn.Module):
@@ -493,7 +460,7 @@ class Attention(nn.Module):
 
 class Discriminator(nn.Module):
 	def __init__(self, base_channel=256, fused=False, spectral=False, from_rgb_activate=False, add_attention=False, res=True, projection=True,
-	             activation_fn='lrelu'):
+	             activation_fn='lrelu', bn=False):
 		super().__init__()
 		self.attention = nn.ModuleDict()
 
@@ -503,9 +470,14 @@ class Discriminator(nn.Module):
 		self.res = res
 		if activation_fn=='lrelu':
 			self.activation = nn.LeakyReLU(0.2)
-		else:
+		elif activation_fn=='gelu':
 			self.activation = nn.GELU()
-
+		elif activation_fn == 'swish':
+			self.activation = Swish()
+		elif activation_fn == 'elu':
+			self.activation = nn.ELU(alpha=1.0)
+		elif activation_fn == 'celu':
+			self.activation = nn.CELU(alpha=1.0)
 
 		if spectral:
 			self.progression = nn.ModuleDict(
@@ -523,6 +495,22 @@ class Discriminator(nn.Module):
 				}
 			)
 			self.final_conv = SNConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0)
+		elif bn:
+			self.progression = nn.ModuleDict(
+				{
+					'0': BNConvBlock(16, 32, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 512
+					'1': BNConvBlock(32, 64, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 256
+
+					'2': BNConvBlock(base_channel//2, base_channel, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 128
+					'3': BNConvBlock(base_channel, base_channel, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 64
+					'4': BNConvBlock(base_channel, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 32
+					'5': BNConvBlock(base_channel * 2, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 16
+					'6': BNConvBlock(base_channel * 2, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 8
+					'7': BNConvBlock(base_channel * 4, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 4
+					'8': BNConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
+				}
+			)
+			self.final_conv = SNConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
 		else:
 			self.progression = nn.ModuleDict(
 				{

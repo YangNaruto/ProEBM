@@ -1,115 +1,14 @@
-import torch
-
-from torch import nn
-from torch.nn import init
-from torch.nn import functional as F
-from torch.autograd import Function
-from torch.nn.utils import spectral_norm
-from math import sqrt
 import math
 import random
-from .split_bn import SplitBatchNorm2d
+import functools
+import operator
 
+import torch
+from torch import nn
+from torch.nn import functional as F
+from torch.autograd import Function
 
-def init_linear(linear):
-	init.xavier_normal(linear.weight)
-	linear.bias.data.zero_()
-
-
-def init_conv(conv, glu=True):
-	init.kaiming_normal(conv.weight)
-	if conv.bias is not None:
-		conv.bias.data.zero_()
-
-
-class EqualLR:
-	def __init__(self, name):
-		self.name = name
-
-	def compute_weight(self, module):
-		weight = getattr(module, self.name + '_orig')
-		fan_in = weight.data.size(1) * weight.data[0][0].numel()
-
-		return weight * sqrt(2 / fan_in)
-
-	@staticmethod
-	def apply(module, name):
-		fn = EqualLR(name)
-
-		weight = getattr(module, name)
-		del module._parameters[name]
-		module.register_parameter(name + '_orig', nn.Parameter(weight.data))
-		module.register_forward_pre_hook(fn)
-
-		return fn
-
-	def __call__(self, module, input):
-		weight = self.compute_weight(module)
-		setattr(module, self.name, weight)
-
-
-def equal_lr(module, name='weight'):
-	EqualLR.apply(module, name)
-
-	return module
-
-
-class FusedUpsample(nn.Module):
-	def __init__(self, in_channel, out_channel, kernel_size, padding=0):
-		super().__init__()
-
-		weight = torch.randn(in_channel, out_channel, kernel_size, kernel_size)
-		bias = torch.zeros(out_channel)
-
-		fan_in = in_channel * kernel_size * kernel_size
-		self.multiplier = sqrt(2 / fan_in)
-
-		self.weight = nn.Parameter(weight)
-		self.bias = nn.Parameter(bias)
-
-		self.pad = padding
-
-	def forward(self, input):
-		weight = F.pad(self.weight * self.multiplier, [1, 1, 1, 1])
-		weight = (
-						 weight[:, :, 1:, 1:]
-						 + weight[:, :, :-1, 1:]
-						 + weight[:, :, 1:, :-1]
-						 + weight[:, :, :-1, :-1]
-				 ) / 4
-
-		out = F.conv_transpose2d(input, weight, self.bias, stride=2, padding=self.pad)
-
-		return out
-
-
-class FusedDownsample(nn.Module):
-	def __init__(self, in_channel, out_channel, kernel_size, padding=0):
-		super().__init__()
-
-		weight = torch.randn(out_channel, in_channel, kernel_size, kernel_size)
-		bias = torch.zeros(out_channel)
-
-		fan_in = in_channel * kernel_size * kernel_size
-		self.multiplier = sqrt(2 / fan_in)
-
-		self.weight = nn.Parameter(weight, requires_grad=True)
-		self.bias = nn.Parameter(bias, requires_grad=True)
-
-		self.pad = padding
-
-	def forward(self, x):
-		weight = F.pad(self.weight * self.multiplier, [1, 1, 1, 1])
-		weight = (
-						 weight[:, :, 1:, 1:]
-						 + weight[:, :, :-1, 1:]
-						 + weight[:, :, 1:, :-1]
-						 + weight[:, :, :-1, :-1]
-				 ) / 4
-
-		out = F.conv2d(x, weight, self.bias, stride=2, padding=self.pad)
-
-		return out
+from op import FusedLeakyReLU, fused_leaky_relu, upfirdn2d
 
 
 class PixelNorm(nn.Module):
@@ -117,347 +16,226 @@ class PixelNorm(nn.Module):
 		super().__init__()
 
 	def forward(self, input):
-		return input / torch.sqrt(torch.mean(input ** 2, dim=1, keepdim=True) + 1e-8)
+		return input * torch.rsqrt(torch.mean(input ** 2, dim=1, keepdim=True) + 1e-8)
 
 
-class BlurFunctionBackward(Function):
-	@staticmethod
-	def forward(ctx, grad_output, kernel, kernel_flip):
-		ctx.save_for_backward(kernel, kernel_flip)
+def make_kernel(k):
+	k = torch.tensor(k, dtype=torch.float32)
 
-		grad_input = F.conv2d(
-			grad_output, kernel_flip, padding=1, groups=grad_output.shape[1]
-		)
+	if k.ndim == 1:
+		k = k[None, :] * k[:, None]
 
-		return grad_input
+	k /= k.sum()
 
-	@staticmethod
-	def backward(ctx, gradgrad_output):
-		kernel, kernel_flip = ctx.saved_tensors
-
-		grad_input = F.conv2d(
-			gradgrad_output, kernel, padding=1, groups=gradgrad_output.shape[1]
-		)
-
-		return grad_input, None, None
+	return k
 
 
-class BlurFunction(Function):
-	@staticmethod
-	def forward(ctx, input, kernel, kernel_flip):
-		ctx.save_for_backward(kernel, kernel_flip)
+class Downsample(nn.Module):
+	def __init__(self, kernel, factor=2):
+		super().__init__()
 
-		output = F.conv2d(input, kernel, padding=1, groups=input.shape[1])
+		self.factor = factor
+		kernel = make_kernel(kernel)
+		self.register_buffer('kernel', kernel)
 
-		return output
+		p = kernel.shape[0] - factor
 
-	@staticmethod
-	def backward(ctx, grad_output):
-		kernel, kernel_flip = ctx.saved_tensors
+		pad0 = (p + 1) // 2
+		pad1 = p // 2
 
-		grad_input = BlurFunctionBackward.apply(grad_output, kernel, kernel_flip)
+		self.pad = (pad0, pad1)
 
-		return grad_input, None, None
+	def forward(self, input):
+		out = upfirdn2d(input, self.kernel, up=1, down=self.factor, pad=self.pad)
 
-
-blur = BlurFunction.apply
+		return out
 
 
 class Blur(nn.Module):
-	def __init__(self, channel):
+	def __init__(self, kernel, pad, upsample_factor=1):
 		super().__init__()
 
-		weight = torch.tensor([[1, 2, 1], [2, 4, 2], [1, 2, 1]], dtype=torch.float32)
-		weight = weight.view(1, 1, 3, 3)
-		weight = weight / weight.sum()
-		weight_flip = torch.flip(weight, [2, 3])
+		kernel = make_kernel(kernel)
 
-		self.register_buffer('weight', weight.repeat(channel, 1, 1, 1))
-		self.register_buffer('weight_flip', weight_flip.repeat(channel, 1, 1, 1))
+		if upsample_factor > 1:
+			kernel = kernel * (upsample_factor ** 2)
+
+		self.register_buffer('kernel', kernel)
+
+		self.pad = pad
 
 	def forward(self, input):
-		return blur(input, self.weight, self.weight_flip)
-	# return F.conv2d(input, self.weight, padding=1, groups=input.shape[1])
+		out = upfirdn2d(input, self.kernel, pad=self.pad)
+
+		return out
 
 
 class EqualConv2d(nn.Module):
-	def __init__(self, *args, **kwargs):
+	def __init__(
+		self, in_channel, out_channel, kernel_size, stride=1, padding=0, bias=True
+	):
 		super().__init__()
 
-		conv = nn.Conv2d(*args, **kwargs)
-		conv.weight.data.normal_()
-		if conv.bias is not None:
-			conv.bias.data.zero_()
-		self.conv = equal_lr(conv)
+		self.weight = nn.Parameter(
+			torch.randn(out_channel, in_channel, kernel_size, kernel_size)
+		)
+		self.scale = 1 / math.sqrt(in_channel * kernel_size ** 2)
+
+		self.stride = stride
+		self.padding = padding
+
+		if bias:
+			self.bias = nn.Parameter(torch.zeros(out_channel))
+
+		else:
+			self.bias = None
 
 	def forward(self, input):
-		return self.conv(input)
+		out = F.conv2d(
+			input,
+			self.weight * self.scale,
+			bias=self.bias,
+			stride=self.stride,
+			padding=self.padding,
+		)
+
+		return out
+
+	def __repr__(self):
+		return (
+			f'{self.__class__.__name__}({self.weight.shape[1]}, {self.weight.shape[0]},'
+			f' {self.weight.shape[2]}, stride={self.stride}, padding={self.padding})'
+		)
 
 
 class EqualLinear(nn.Module):
-	def __init__(self, in_dim, out_dim):
+	def __init__(
+		self, in_dim, out_dim, bias=True, bias_init=0, lr_mul=1, activation=None
+	):
 		super().__init__()
 
-		linear = nn.Linear(in_dim, out_dim)
-		linear.weight.data.normal_()
-		linear.bias.data.zero_()
+		self.weight = nn.Parameter(torch.randn(out_dim, in_dim).div_(lr_mul))
 
-		self.linear = equal_lr(linear)
+		if bias:
+			self.bias = nn.Parameter(torch.zeros(out_dim).fill_(bias_init))
+
+		else:
+			self.bias = None
+
+		self.activation = activation
+
+		self.scale = (1 / math.sqrt(in_dim)) * lr_mul
+		self.lr_mul = lr_mul
 
 	def forward(self, input):
-		return self.linear(input)
-
-
-class ConvBlock(nn.Module):
-	def __init__(
-			self,
-			in_channel,
-			out_channel,
-			kernel_size,
-			padding,
-			kernel_size2=None,
-			padding2=None,
-			downsample=False,
-			fused=False,
-			activation_fn='lrelu'
-	):
-		super().__init__()
-
-		if activation_fn=='lrelu':
-			self.activation = nn.LeakyReLU(0.2)
-		else:
-			self.activation = nn.GELU()
-
-		pad1 = padding
-		pad2 = padding
-		if padding2 is not None:
-			pad2 = padding2
-
-		kernel1 = kernel_size
-		kernel2 = kernel_size
-		if kernel_size2 is not None:
-			kernel2 = kernel_size2
-
-		self.conv1 = nn.Sequential(
-			EqualConv2d(in_channel, out_channel, kernel1, padding=pad1),
-		)
-
-		if downsample:
-			if fused:
-				self.conv2 = nn.Sequential(
-					# Blur(out_channel),
-					FusedDownsample(out_channel, out_channel, kernel2, padding=pad2),
-				)
-
-			else:
-				self.conv2 = nn.Sequential(
-					# Blur(out_channel),
-					EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
-					nn.AvgPool2d(2),
-				)
+		if self.activation:
+			out = F.linear(input, self.weight * self.scale)
+			out = fused_leaky_relu(out, self.bias * self.lr_mul)
 
 		else:
-			self.conv2 = nn.Sequential(
-				EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
+			out = F.linear(
+				input, self.weight * self.scale, bias=self.bias * self.lr_mul
 			)
 
-		# self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
-		self.skip = EqualConv2d(in_channel, out_channel, 1, stride=2, padding=0, bias=False)
-
-	def forward(self, input, res=True):
-		out = self.conv1(input)
-		out = self.activation(out)
-
-		out = self.conv2(out)
-		if res:
-			skip = self.skip(input)
-			out = (skip + out )
-
-		out = self.activation(out)
 		return out
 
-
-class BNConvBlock(nn.Module):
-	def __init__(
-			self,
-			in_channel,
-			out_channel,
-			kernel_size,
-			padding,
-			kernel_size2=None,
-			padding2=None,
-			downsample=False,
-			fused=False,
-			activation_fn='lrelu'
-	):
-		super().__init__()
-		if activation_fn=='lrelu':
-			self.activation = nn.LeakyReLU(0.2)
-		else:
-			self.activation = nn.GELU()
-
-		pad1 = padding
-		pad2 = padding
-		if padding2 is not None:
-			pad2 = padding2
-
-		kernel1 = kernel_size
-		kernel2 = kernel_size
-		if kernel_size2 is not None:
-			kernel2 = kernel_size2
-
-		self.conv1 = nn.Sequential(
-			EqualConv2d(in_channel, out_channel, kernel1, padding=pad1),
+	def __repr__(self):
+		return (
+			f'{self.__class__.__name__}({self.weight.shape[1]}, {self.weight.shape[0]})'
 		)
 
-		if downsample:
-			if fused:
-				self.conv2 = nn.Sequential(
-					# Blur(out_channel),
-					FusedDownsample(out_channel, out_channel, kernel2, padding=pad2),
 
-				)
-
-			else:
-				self.conv2 = nn.Sequential(
-					# Blur(out_channel),
-					EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
-					nn.AvgPool2d(2),
-
-				)
-
-		else:
-			self.conv2 = nn.Sequential(
-				EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
-
-			)
-		self.bn1 = SplitBatchNorm2d(in_channel)
-		self.bn2 = SplitBatchNorm2d(out_channel)
-		self.skip = EqualConv2d(in_channel, out_channel, 1, stride=2, padding=0, bias=False)
-		# self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
-
-	def forward(self, input, res=True):
-		out = self.conv1(input)
-		out = self.bn1(out)
-		out = self.activation(out)
-
-		out = self.conv2(out)
-		out = self.bn2(out)
-		if res:
-			skip = self.skip(input)
-			out = (skip + out )
-		out = self.activation(out)
-		return out
-
-
-
-class SNConvBlock(nn.Module):
-	def __init__(
-			self,
-			in_channel,
-			out_channel,
-			kernel_size,
-			padding,
-			kernel_size2=None,
-			padding2=None,
-			downsample=False,
-			fused=False,
-			activation_fn='lrelu'
-	):
-		super().__init__()
-		if activation_fn == 'lrelu':
-			self.activation = nn.LeakyReLU(0.2)
-		else:
-			self.activation = nn.GELU()
-
-		pad1 = padding
-		pad2 = padding
-		if padding2 is not None:
-			pad2 = padding2
-
-		kernel1 = kernel_size
-		kernel2 = kernel_size
-		if kernel_size2 is not None:
-			kernel2 = kernel_size2
-
-		self.conv1 = nn.Sequential(
-			spectral_norm(nn.Conv2d(in_channel, out_channel, kernel1, padding=pad1)),
-			self.activation,
-		)
-
-		if downsample:
-			if fused:
-				self.conv2 = nn.Sequential(
-					# Blur(out_channel),
-					FusedDownsample(out_channel, out_channel, kernel2, padding=pad2),
-				)
-
-			else:
-				self.conv2 = nn.Sequential(
-					# Blur(out_channel),
-					spectral_norm(nn.Conv2d(out_channel, out_channel, kernel2, padding=pad2)),
-					nn.AvgPool2d(2),
-				)
-
-		else:
-			self.conv2 = nn.Sequential(
-				spectral_norm(nn.Conv2d(out_channel, out_channel, kernel2, padding=pad2)),
-			)
-		# self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
-		# self.skip = spectral_norm(nn.Conv2d(in_channel, out_channel, 1, stride=2, padding=0, bias=False))
-		self.skip = lambda x: F.interpolate(x, scale_factor=0.5, mode='bilinear', align_corners=False)
-
-	def forward(self, input, res=True):
-		out = self.conv1(input)
-		out = self.activation(out)
-
-		out = self.conv2(out)
-		if res:
-			skip = self.skip(input)
-			out = (skip + out )
-		out = self.activation(out)
-		return out
-
-
-class NoiseInjection(nn.Module):
-	def __init__(self, channel):
+class ScaledLeakyReLU(nn.Module):
+	def __init__(self, negative_slope=0.2):
 		super().__init__()
 
-		self.weight = nn.Parameter(torch.zeros(1, channel, 1, 1), requires_grad=True)
+		self.negative_slope = negative_slope
 
-	def forward(self, image, noise):
-		return image + self.weight * noise
+	def forward(self, input):
+		out = F.leaky_relu(input, negative_slope=self.negative_slope)
+
+		return out * math.sqrt(2)
 
 
 class ConstantInput(nn.Module):
 	def __init__(self, channel, size=4):
 		super().__init__()
 
-		self.input = nn.Parameter(torch.randn(1, channel, size, size), requires_grad=True)
+		self.input = nn.Parameter(torch.randn(1, channel, size, size))
 
-	def forward(self, x):
-		batch = x.shape[0]
+	def forward(self, input):
+		batch = input.shape[0]
 		out = self.input.repeat(batch, 1, 1, 1)
 
 		return out
 
 
-class AdaptiveInstanceNorm(nn.Module):
-	def __init__(self, in_channel, style_dim):
+class ConvLayer(nn.Sequential):
+	def __init__(
+		self,
+		in_channel,
+		out_channel,
+		kernel_size,
+		downsample=False,
+		blur_kernel=[1, 3, 3, 1],
+		bias=True,
+		activate=True,
+	):
+		layers = []
+
+		if downsample:
+			factor = 2
+			p = (len(blur_kernel) - factor) + (kernel_size - 1)
+			pad0 = (p + 1) // 2
+			pad1 = p // 2
+
+			layers.append(Blur(blur_kernel, pad=(pad0, pad1)))
+
+			stride = 2
+			self.padding = 0
+
+		else:
+			stride = 1
+			self.padding = kernel_size // 2
+
+		layers.append(
+			EqualConv2d(
+				in_channel,
+				out_channel,
+				kernel_size,
+				padding=self.padding,
+				stride=stride,
+				bias=bias and not activate,
+			)
+		)
+
+		if activate:
+			if bias:
+				layers.append(FusedLeakyReLU(out_channel))
+
+			else:
+				layers.append(ScaledLeakyReLU(0.2))
+
+		super().__init__(*layers)
+
+
+class ResBlock(nn.Module):
+	def __init__(self, in_channel, out_channel, blur_kernel=[1, 3, 3, 1]):
 		super().__init__()
 
-		self.norm = nn.InstanceNorm2d(in_channel)
-		self.style = EqualLinear(style_dim, in_channel * 2)
+		self.conv1 = ConvLayer(in_channel, in_channel, 3)
+		self.conv2 = ConvLayer(in_channel, out_channel, 3, downsample=True)
 
-		self.style.linear.bias.data[:in_channel] = 1
-		self.style.linear.bias.data[in_channel:] = 0
+		self.skip = ConvLayer(
+			in_channel, out_channel, 1, downsample=True, activate=False, bias=False
+		)
 
-	def forward(self, input, style):
-		style = self.style(style).unsqueeze(2).unsqueeze(3)
-		gamma, beta = style.chunk(2, 1)
+	def forward(self, input):
+		out = self.conv1(input)
+		out = self.conv2(out)
 
-		out = self.norm(input)
-		out = gamma * out + beta
+		skip = self.skip(input)
+		out = (out + skip) / math.sqrt(2)
 
 		return out
 
@@ -501,13 +279,13 @@ class Attention(nn.Module):
 
 class Discriminator(nn.Module):
 	def __init__(self, base_channel=256, fused=False, spectral=False, from_rgb_activate=False, add_attention=False, res=True, projection=True,
-	             activation_fn='lrelu', bn=False):
+				 activation_fn='lrelu', bn=False):
 		super().__init__()
 		self.attention = nn.ModuleDict()
 
 		if add_attention:
 			self.attention  =nn.ModuleDict({'4': Attention(in_dim=base_channel * 2),
-		                                '5': Attention(in_dim=base_channel * 2)})
+										'5': Attention(in_dim=base_channel * 2)})
 		self.res = res
 		if activation_fn=='lrelu':
 			self.activation = nn.LeakyReLU(0.2)
@@ -515,54 +293,22 @@ class Discriminator(nn.Module):
 			self.activation = nn.GELU()
 
 
-		if spectral:
-			self.progression = nn.ModuleDict(
-				{
-					'0': SNConvBlock(16, 32, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 512
-					'1': SNConvBlock(32, 64, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 256
 
-					'2': SNConvBlock(base_channel//2, base_channel, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 128
-					'3': SNConvBlock(base_channel, base_channel, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 64
-					'4': SNConvBlock(base_channel, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 32
-					'5': SNConvBlock(base_channel * 2, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 16
-					'6': SNConvBlock(base_channel * 2, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 8
-					'7': SNConvBlock(base_channel * 4, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 4
-					'8': SNConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0)
-				}
-			)
-			self.final_conv = SNConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0)
-		elif bn:
-			self.progression = nn.ModuleDict(
-				{
-					'0': BNConvBlock(16, 32, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 512
-					'1': BNConvBlock(32, 64, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 256
+		self.progression = nn.ModuleDict(
+			{
+				'0': ResBlock(16, 32, activation_fn=activation_fn),  # 512
+				'1': ResBlock(32, 64, activation_fn=activation_fn),  # 256
 
-					'2': BNConvBlock(base_channel//2, base_channel, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 128
-					'3': BNConvBlock(base_channel, base_channel, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 64
-					'4': BNConvBlock(base_channel, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 32
-					'5': BNConvBlock(base_channel * 2, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 16
-					'6': BNConvBlock(base_channel * 2, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 8
-					'7': BNConvBlock(base_channel * 4, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 4
-					'8': BNConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
-				}
-			)
-			self.final_conv = SNConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
-		else:
-			self.progression = nn.ModuleDict(
-				{
-					'0': ConvBlock(16, 32, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 512
-					'1': ConvBlock(32, 64, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 256
-
-					'2': ConvBlock(base_channel//2, base_channel, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 128
-					'3': ConvBlock(base_channel, base_channel, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 64
-					'4': ConvBlock(base_channel, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 32
-					'5': ConvBlock(base_channel * 2, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 16
-					'6': ConvBlock(base_channel * 2, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 8
-					'7': ConvBlock(base_channel * 4, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 4
-					'8': ConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
-				}
-			)
-			self.final_conv = ConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
+				'2': ResBlock(base_channel//2, base_channel, activation_fn=activation_fn),  # 128
+				'3': ResBlock(base_channel, base_channel, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 64
+				'4': ResBlock(base_channel, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 32
+				'5': ResBlock(base_channel * 2, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 16
+				'6': ConvBlock(base_channel * 2, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 8
+				'7': ConvBlock(base_channel * 4, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 4
+				'8': ConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
+			}
+		)
+		self.final_conv = ConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
 
 		def make_from_rgb(out_channel):
 			if from_rgb_activate:
@@ -587,7 +333,7 @@ class Discriminator(nn.Module):
 		)
 
 		self.norm = nn.ModuleList([nn.InstanceNorm2d(3),
-		                           nn.InstanceNorm2d(3),nn.InstanceNorm2d(3), nn.InstanceNorm2d(3), nn.InstanceNorm2d(3)])
+								   nn.InstanceNorm2d(3),nn.InstanceNorm2d(3), nn.InstanceNorm2d(3), nn.InstanceNorm2d(3)])
 		self.n_layer = len(self.progression)
 
 		# self.linear = EqualLinear(base_channel*4, 1)
