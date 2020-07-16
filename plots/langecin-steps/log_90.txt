@@ -1,0 +1,619 @@
+Namespace(activation_fn='gelu', base_channel=32, base_sigma=0.0, batch={8: 256, 16: 256, 32: 128, 64: 128, 128: 64, 256: 32}, batch_default=128, bn=False, ckpt=None, conditional=True, cyclic=False, data_root='./data/', dataset='cifar10', device=0, eval_step=50, from_beginning=False, from_rgb_activate=False, init_size=8, initial='uniform', l2_coefficient=0.0, langevin_lr=2.0, langevin_step=90, load=False, lr={8: 0.001, 16: 0.0012, 32: 0.0015, 64: 0.0015, 128: 0.0015}, lr_default=0.0005, max_size=32, mode='train', name_suffix='step', noise_ratio=1.0, phase=1000000, pro=True, projection=True, res=True, run_dir='results/cifar10_step/00004-step90-trunc1.0-res32-lr2.0-uniform-ch32', save_path='results', sched=True, soft=True, spectral=True, split_bn=False, stats_path='./stats/cifar10.npz', truncation=1.0, val_clip=1.1)
+Itr:      0 Kimg:        0, Alpha: 1.00, Res:   8, f(x_p_d)=  0.0763 f(x_q)=  0.3653
+Itr:    100 Kimg:       25, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1344 f(x_q)=  0.1410
+Itr:    200 Kimg:       51, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1388 f(x_q)=  0.1382
+Itr:    300 Kimg:       77, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1405 f(x_q)=  0.1322
+Itr:    400 Kimg:      102, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1361 f(x_q)=  0.1263
+Itr:    500 Kimg:      128, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1449 f(x_q)=  0.1385
+Itr:    600 Kimg:      153, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1672 f(x_q)=  0.2482
+Itr:    700 Kimg:      179, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1638 f(x_q)=  0.1970
+Itr:    800 Kimg:      205, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1382 f(x_q)=  0.1707
+Itr:    900 Kimg:      230, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1502 f(x_q)=  0.1401
+Itr:   1000 Kimg:      256, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1705 f(x_q)=  0.1567
+Itr:   1100 Kimg:      281, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1451 f(x_q)=  0.1157
+Itr:   1200 Kimg:      307, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1458 f(x_q)=  0.1714
+Itr:   1300 Kimg:      333, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1594 f(x_q)=  0.1800
+Itr:   1400 Kimg:      358, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1433 f(x_q)=  0.1255
+Itr:   1500 Kimg:      384, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1397 f(x_q)=  0.1232
+Itr:   1600 Kimg:      409, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1402 f(x_q)=  0.1389
+Itr:   1700 Kimg:      435, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1308 f(x_q)=  0.1098
+Itr:   1800 Kimg:      461, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1371 f(x_q)=  0.1358
+Itr:   1900 Kimg:      486, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1189 f(x_q)=  0.0781
+Itr:   2000 Kimg:      512, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1638 f(x_q)=  0.1849
+Calculate FID...
+Itr:   2000, FID:   232.766
+Itr:   2100 Kimg:      537, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1443 f(x_q)=  0.1490
+Itr:   2200 Kimg:      563, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1507 f(x_q)=  0.1529
+Itr:   2300 Kimg:      589, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1333 f(x_q)=  0.1250
+Itr:   2400 Kimg:      614, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1587 f(x_q)=  0.2308
+Itr:   2500 Kimg:      640, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1296 f(x_q)=  0.1031
+Itr:   2600 Kimg:      665, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1404 f(x_q)=  0.1553
+Itr:   2700 Kimg:      691, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1333 f(x_q)=  0.1254
+Itr:   2800 Kimg:      717, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1652 f(x_q)=  0.2112
+Itr:   2900 Kimg:      742, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1452 f(x_q)=  0.1263
+Itr:   3000 Kimg:      768, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1335 f(x_q)=  0.1276
+Itr:   3100 Kimg:      793, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1377 f(x_q)=  0.1106
+Itr:   3200 Kimg:      819, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1506 f(x_q)=  0.1542
+Itr:   3300 Kimg:      845, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1367 f(x_q)=  0.1037
+Itr:   3400 Kimg:      870, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1438 f(x_q)=  0.1649
+Itr:   3500 Kimg:      896, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1425 f(x_q)=  0.1321
+Itr:   3600 Kimg:      921, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1420 f(x_q)=  0.1495
+Itr:   3700 Kimg:      947, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1431 f(x_q)=  0.1422
+Itr:   3800 Kimg:      973, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1365 f(x_q)=  0.1141
+Itr:   3900 Kimg:      998, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1430 f(x_q)=  0.1266
+Itr:   4000 Kimg:     1024, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1299 f(x_q)=  0.1171
+Calculate FID...
+Itr:   4000, FID:   198.356
+Itr:   4100 Kimg:     1049, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1462 f(x_q)=  0.1361
+Itr:   4200 Kimg:     1075, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1447 f(x_q)=  0.1263
+Itr:   4300 Kimg:     1101, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1409 f(x_q)=  0.1012
+Itr:   4400 Kimg:     1126, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1456 f(x_q)=  0.1310
+Itr:   4500 Kimg:     1152, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1384 f(x_q)=  0.1263
+Itr:   4600 Kimg:     1177, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1636 f(x_q)=  0.1831
+Itr:   4700 Kimg:     1203, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1597 f(x_q)=  0.1958
+Itr:   4800 Kimg:     1229, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1580 f(x_q)=  0.1399
+Itr:   4900 Kimg:     1254, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1316 f(x_q)=  0.1295
+Itr:   5000 Kimg:     1280, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1478 f(x_q)=  0.1512
+Itr:   5100 Kimg:     1305, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1751 f(x_q)=  0.1701
+Itr:   5200 Kimg:     1331, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1518 f(x_q)=  0.1566
+Itr:   5300 Kimg:     1357, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1355 f(x_q)=  0.1120
+Itr:   5400 Kimg:     1382, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1402 f(x_q)=  0.1174
+Itr:   5500 Kimg:     1408, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1396 f(x_q)=  0.1481
+Itr:   5600 Kimg:     1433, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1558 f(x_q)=  0.1540
+Itr:   5700 Kimg:     1459, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1597 f(x_q)=  0.1473
+Itr:   5800 Kimg:     1485, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1355 f(x_q)=  0.1377
+Itr:   5900 Kimg:     1510, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1619 f(x_q)=  0.1586
+Itr:   6000 Kimg:     1536, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1706 f(x_q)=  0.1852
+Calculate FID...
+Itr:   6000, FID:   190.036
+Itr:   6100 Kimg:     1561, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1738 f(x_q)=  0.1567
+Itr:   6200 Kimg:     1587, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1640 f(x_q)=  0.1759
+Itr:   6300 Kimg:     1613, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1697 f(x_q)=  0.1771
+Itr:   6400 Kimg:     1638, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1646 f(x_q)=  0.1882
+Itr:   6500 Kimg:     1664, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1630 f(x_q)=  0.1940
+Itr:   6600 Kimg:     1689, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1793 f(x_q)=  0.1821
+Itr:   6700 Kimg:     1715, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1812 f(x_q)=  0.2116
+Itr:   6800 Kimg:     1741, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1611 f(x_q)=  0.1624
+Itr:   6900 Kimg:     1766, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1716 f(x_q)=  0.1781
+Itr:   7000 Kimg:     1792, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1519 f(x_q)=  0.1325
+Itr:   7100 Kimg:     1817, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1780 f(x_q)=  0.1718
+Itr:   7200 Kimg:     1843, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1679 f(x_q)=  0.1882
+Itr:   7300 Kimg:     1869, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1652 f(x_q)=  0.1778
+Itr:   7400 Kimg:     1894, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1780 f(x_q)=  0.1807
+Itr:   7500 Kimg:     1920, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1669 f(x_q)=  0.1874
+Itr:   7600 Kimg:     1945, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1821 f(x_q)=  0.1764
+Itr:   7700 Kimg:     1971, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1723 f(x_q)=  0.2085
+Itr:   7800 Kimg:     1997, Alpha: 1.00, Res:   8, f(x_p_d)=  0.1664 f(x_q)=  0.1669
+Itr:   7900 Kimg:     2022, Alpha: 0.02, Res:  16, f(x_p_d)=  0.1398 f(x_q)=  0.1231
+Itr:   8000 Kimg:     2048, Alpha: 0.05, Res:  16, f(x_p_d)=  0.1455 f(x_q)=  0.1525
+Itr:   8100 Kimg:     2073, Alpha: 0.07, Res:  16, f(x_p_d)=  0.1556 f(x_q)=  0.1688
+Itr:   8200 Kimg:     2099, Alpha: 0.10, Res:  16, f(x_p_d)=  0.1599 f(x_q)=  0.1929
+Itr:   8300 Kimg:     2125, Alpha: 0.12, Res:  16, f(x_p_d)=  0.1640 f(x_q)=  0.1622
+Itr:   8400 Kimg:     2150, Alpha: 0.15, Res:  16, f(x_p_d)=  0.2162 f(x_q)=  0.2161
+Itr:   8500 Kimg:     2176, Alpha: 0.18, Res:  16, f(x_p_d)=  0.2509 f(x_q)=  0.2398
+Itr:   8600 Kimg:     2201, Alpha: 0.20, Res:  16, f(x_p_d)=  0.2401 f(x_q)=  0.2181
+Itr:   8700 Kimg:     2227, Alpha: 0.23, Res:  16, f(x_p_d)=  0.2621 f(x_q)=  0.2975
+Itr:   8800 Kimg:     2253, Alpha: 0.25, Res:  16, f(x_p_d)=  0.2810 f(x_q)=  0.3858
+Itr:   8900 Kimg:     2278, Alpha: 0.28, Res:  16, f(x_p_d)=  0.2785 f(x_q)=  0.2856
+Itr:   9000 Kimg:     2304, Alpha: 0.30, Res:  16, f(x_p_d)=  0.2876 f(x_q)=  0.3353
+Itr:   9100 Kimg:     2329, Alpha: 0.33, Res:  16, f(x_p_d)=  0.2394 f(x_q)=  0.2424
+Itr:   9200 Kimg:     2355, Alpha: 0.36, Res:  16, f(x_p_d)=  0.2590 f(x_q)=  0.2555
+Itr:   9300 Kimg:     2381, Alpha: 0.38, Res:  16, f(x_p_d)=  0.2572 f(x_q)=  0.2874
+Itr:   9400 Kimg:     2406, Alpha: 0.41, Res:  16, f(x_p_d)=  0.2556 f(x_q)=  0.2568
+Itr:   9500 Kimg:     2432, Alpha: 0.43, Res:  16, f(x_p_d)=  0.2225 f(x_q)=  0.2022
+Itr:   9600 Kimg:     2457, Alpha: 0.46, Res:  16, f(x_p_d)=  0.2079 f(x_q)=  0.1758
+Itr:   9700 Kimg:     2483, Alpha: 0.48, Res:  16, f(x_p_d)=  0.2880 f(x_q)=  0.3064
+Itr:   9800 Kimg:     2509, Alpha: 0.51, Res:  16, f(x_p_d)=  0.3323 f(x_q)=  0.4210
+Itr:   9900 Kimg:     2534, Alpha: 0.53, Res:  16, f(x_p_d)=  0.3324 f(x_q)=  0.4261
+Itr:  10000 Kimg:     2560, Alpha: 0.56, Res:  16, f(x_p_d)=  0.3306 f(x_q)=  0.5129
+Itr:  10100 Kimg:     2585, Alpha: 0.59, Res:  16, f(x_p_d)=  0.3498 f(x_q)=  0.1932
+Itr:  10200 Kimg:     2611, Alpha: 0.61, Res:  16, f(x_p_d)=  0.4439 f(x_q)=  0.5326
+Itr:  10300 Kimg:     2637, Alpha: 0.64, Res:  16, f(x_p_d)=  0.4895 f(x_q)=  0.4408
+Itr:  10400 Kimg:     2662, Alpha: 0.66, Res:  16, f(x_p_d)=  0.4798 f(x_q)=  0.6547
+Itr:  10500 Kimg:     2688, Alpha: 0.69, Res:  16, f(x_p_d)=  0.4955 f(x_q)=  0.5049
+Itr:  10600 Kimg:     2713, Alpha: 0.71, Res:  16, f(x_p_d)=  0.5010 f(x_q)=  0.6067
+Itr:  10700 Kimg:     2739, Alpha: 0.74, Res:  16, f(x_p_d)=  0.4303 f(x_q)=  0.4219
+Itr:  10800 Kimg:     2765, Alpha: 0.76, Res:  16, f(x_p_d)=  0.5095 f(x_q)=  0.4466
+Itr:  10900 Kimg:     2790, Alpha: 0.79, Res:  16, f(x_p_d)=  0.5119 f(x_q)=  0.3907
+Itr:  11000 Kimg:     2816, Alpha: 0.82, Res:  16, f(x_p_d)=  0.5799 f(x_q)=  0.5614
+Itr:  11100 Kimg:     2841, Alpha: 0.84, Res:  16, f(x_p_d)=  0.5929 f(x_q)=  0.5161
+Itr:  11200 Kimg:     2867, Alpha: 0.87, Res:  16, f(x_p_d)=  0.6672 f(x_q)=  0.7221
+Itr:  11300 Kimg:     2893, Alpha: 0.89, Res:  16, f(x_p_d)=  0.6615 f(x_q)=  0.5750
+Itr:  11400 Kimg:     2918, Alpha: 0.92, Res:  16, f(x_p_d)=  0.7261 f(x_q)=  0.5972
+Itr:  11500 Kimg:     2944, Alpha: 0.94, Res:  16, f(x_p_d)=  0.8032 f(x_q)=  0.9392
+Itr:  11600 Kimg:     2969, Alpha: 0.97, Res:  16, f(x_p_d)=  0.8372 f(x_q)=  0.9779
+Itr:  11700 Kimg:     2995, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8516 f(x_q)=  0.7226
+Itr:  11800 Kimg:     3021, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8761 f(x_q)=  0.9394
+Itr:  11900 Kimg:     3046, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9657 f(x_q)=  0.9693
+Itr:  12000 Kimg:     3072, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9263 f(x_q)=  0.8191
+Calculate FID...
+Itr:  12000, FID:   114.509
+Itr:  12100 Kimg:     3097, Alpha: 1.00, Res:  16, f(x_p_d)=  1.0136 f(x_q)=  1.2462
+Itr:  12200 Kimg:     3123, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8691 f(x_q)=  0.7452
+Itr:  12300 Kimg:     3149, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9639 f(x_q)=  1.1606
+Itr:  12400 Kimg:     3174, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8969 f(x_q)=  0.8027
+Itr:  12500 Kimg:     3200, Alpha: 1.00, Res:  16, f(x_p_d)=  1.0119 f(x_q)=  1.0437
+Itr:  12600 Kimg:     3225, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8795 f(x_q)=  0.5409
+Itr:  12700 Kimg:     3251, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8818 f(x_q)=  0.7641
+Itr:  12800 Kimg:     3277, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9283 f(x_q)=  0.9950
+Itr:  12900 Kimg:     3302, Alpha: 1.00, Res:  16, f(x_p_d)=  1.0276 f(x_q)=  0.9455
+Itr:  13000 Kimg:     3328, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8975 f(x_q)=  1.0383
+Itr:  13100 Kimg:     3353, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9353 f(x_q)=  0.9536
+Itr:  13200 Kimg:     3379, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9660 f(x_q)=  0.8359
+Itr:  13300 Kimg:     3405, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9951 f(x_q)=  1.2108
+Itr:  13400 Kimg:     3430, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9024 f(x_q)=  0.8080
+Itr:  13500 Kimg:     3456, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9214 f(x_q)=  1.0993
+Itr:  13600 Kimg:     3481, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9577 f(x_q)=  1.1845
+Itr:  13700 Kimg:     3507, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8716 f(x_q)=  0.8540
+Itr:  13800 Kimg:     3533, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8669 f(x_q)=  0.6939
+Itr:  13900 Kimg:     3558, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8987 f(x_q)=  0.8906
+Itr:  14000 Kimg:     3584, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8611 f(x_q)=  0.6412
+Calculate FID...
+Itr:  14000, FID:    86.043
+Itr:  14100 Kimg:     3609, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8574 f(x_q)=  0.8193
+Itr:  14200 Kimg:     3635, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9257 f(x_q)=  0.8288
+Itr:  14300 Kimg:     3661, Alpha: 1.00, Res:  16, f(x_p_d)=  1.0559 f(x_q)=  1.5089
+Itr:  14400 Kimg:     3686, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8010 f(x_q)=  0.7372
+Itr:  14500 Kimg:     3712, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8408 f(x_q)=  0.9381
+Itr:  14600 Kimg:     3737, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9204 f(x_q)=  0.7999
+Itr:  14700 Kimg:     3763, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8895 f(x_q)=  0.9259
+Itr:  14800 Kimg:     3789, Alpha: 1.00, Res:  16, f(x_p_d)=  1.0333 f(x_q)=  1.3900
+Itr:  14900 Kimg:     3814, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8711 f(x_q)=  0.9382
+Itr:  15000 Kimg:     3840, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9135 f(x_q)=  1.0080
+Itr:  15100 Kimg:     3865, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9340 f(x_q)=  0.8384
+Itr:  15200 Kimg:     3891, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9135 f(x_q)=  1.1713
+Itr:  15300 Kimg:     3917, Alpha: 1.00, Res:  16, f(x_p_d)=  0.9712 f(x_q)=  0.9410
+Itr:  15400 Kimg:     3942, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8523 f(x_q)=  0.8662
+Itr:  15500 Kimg:     3968, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8720 f(x_q)=  0.7844
+Itr:  15600 Kimg:     3993, Alpha: 1.00, Res:  16, f(x_p_d)=  0.8729 f(x_q)=  0.7914
+Itr:  15700 Kimg:     4009, Alpha: 0.01, Res:  32, f(x_p_d)=  0.7345 f(x_q)=  0.5412
+Itr:  15800 Kimg:     4022, Alpha: 0.02, Res:  32, f(x_p_d)=  0.7572 f(x_q)=  0.7785
+Itr:  15900 Kimg:     4035, Alpha: 0.04, Res:  32, f(x_p_d)=  0.7395 f(x_q)=  0.7809
+Itr:  16000 Kimg:     4048, Alpha: 0.05, Res:  32, f(x_p_d)=  0.7022 f(x_q)=  0.6663
+Itr:  16100 Kimg:     4061, Alpha: 0.06, Res:  32, f(x_p_d)=  0.7246 f(x_q)=  0.6429
+Itr:  16200 Kimg:     4073, Alpha: 0.07, Res:  32, f(x_p_d)=  0.8760 f(x_q)=  0.8970
+Itr:  16300 Kimg:     4086, Alpha: 0.09, Res:  32, f(x_p_d)=  0.6343 f(x_q)=  0.4987
+Itr:  16400 Kimg:     4099, Alpha: 0.10, Res:  32, f(x_p_d)=  0.6111 f(x_q)=  0.9435
+Itr:  16500 Kimg:     4112, Alpha: 0.11, Res:  32, f(x_p_d)=  0.8240 f(x_q)=  0.8951
+Itr:  16600 Kimg:     4125, Alpha: 0.12, Res:  32, f(x_p_d)=  0.7787 f(x_q)=  0.7779
+Itr:  16700 Kimg:     4137, Alpha: 0.14, Res:  32, f(x_p_d)=  0.7599 f(x_q)=  0.9335
+Itr:  16800 Kimg:     4150, Alpha: 0.15, Res:  32, f(x_p_d)=  0.6799 f(x_q)=  0.7086
+Itr:  16900 Kimg:     4163, Alpha: 0.16, Res:  32, f(x_p_d)=  0.7098 f(x_q)=  0.6395
+Itr:  17000 Kimg:     4176, Alpha: 0.18, Res:  32, f(x_p_d)=  0.7861 f(x_q)=  0.7961
+Itr:  17100 Kimg:     4189, Alpha: 0.19, Res:  32, f(x_p_d)=  0.6560 f(x_q)=  0.5758
+Itr:  17200 Kimg:     4201, Alpha: 0.20, Res:  32, f(x_p_d)=  0.6209 f(x_q)=  0.6345
+Itr:  17300 Kimg:     4214, Alpha: 0.21, Res:  32, f(x_p_d)=  0.7431 f(x_q)=  0.4989
+Itr:  17400 Kimg:     4227, Alpha: 0.23, Res:  32, f(x_p_d)=  0.6290 f(x_q)=  0.6442
+Itr:  17500 Kimg:     4240, Alpha: 0.24, Res:  32, f(x_p_d)=  0.8342 f(x_q)=  0.8552
+Itr:  17600 Kimg:     4253, Alpha: 0.25, Res:  32, f(x_p_d)=  0.7409 f(x_q)=  0.6270
+Itr:  17700 Kimg:     4265, Alpha: 0.27, Res:  32, f(x_p_d)=  0.5315 f(x_q)=  0.7183
+Itr:  17800 Kimg:     4278, Alpha: 0.28, Res:  32, f(x_p_d)=  0.6270 f(x_q)=  0.9361
+Itr:  17900 Kimg:     4291, Alpha: 0.29, Res:  32, f(x_p_d)=  0.7466 f(x_q)=  0.6917
+Itr:  18000 Kimg:     4304, Alpha: 0.30, Res:  32, f(x_p_d)=  0.7404 f(x_q)=  0.6050
+Itr:  18100 Kimg:     4317, Alpha: 0.32, Res:  32, f(x_p_d)=  0.7071 f(x_q)=  0.7981
+Itr:  18200 Kimg:     4329, Alpha: 0.33, Res:  32, f(x_p_d)=  0.7400 f(x_q)=  0.6535
+Itr:  18300 Kimg:     4342, Alpha: 0.34, Res:  32, f(x_p_d)=  0.9240 f(x_q)=  0.8608
+Itr:  18400 Kimg:     4355, Alpha: 0.36, Res:  32, f(x_p_d)=  0.9548 f(x_q)=  1.2511
+Itr:  18500 Kimg:     4368, Alpha: 0.37, Res:  32, f(x_p_d)=  0.8490 f(x_q)=  0.6278
+Itr:  18600 Kimg:     4381, Alpha: 0.38, Res:  32, f(x_p_d)=  0.8734 f(x_q)=  0.9314
+Itr:  18700 Kimg:     4393, Alpha: 0.39, Res:  32, f(x_p_d)=  0.6984 f(x_q)=  0.5349
+Itr:  18800 Kimg:     4406, Alpha: 0.41, Res:  32, f(x_p_d)=  0.8071 f(x_q)=  0.6697
+Itr:  18900 Kimg:     4419, Alpha: 0.42, Res:  32, f(x_p_d)=  0.7806 f(x_q)=  0.7941
+Itr:  19000 Kimg:     4432, Alpha: 0.43, Res:  32, f(x_p_d)=  0.9833 f(x_q)=  1.1799
+Itr:  19100 Kimg:     4445, Alpha: 0.44, Res:  32, f(x_p_d)=  0.8498 f(x_q)=  1.6548
+Itr:  19200 Kimg:     4457, Alpha: 0.46, Res:  32, f(x_p_d)=  0.8951 f(x_q)=  0.8918
+Itr:  19300 Kimg:     4470, Alpha: 0.47, Res:  32, f(x_p_d)=  1.0120 f(x_q)=  1.2804
+Itr:  19400 Kimg:     4483, Alpha: 0.48, Res:  32, f(x_p_d)=  1.0235 f(x_q)=  1.1426
+Itr:  19500 Kimg:     4496, Alpha: 0.50, Res:  32, f(x_p_d)=  0.8877 f(x_q)=  1.0933
+Itr:  19600 Kimg:     4509, Alpha: 0.51, Res:  32, f(x_p_d)=  1.0358 f(x_q)=  1.0374
+Itr:  19700 Kimg:     4521, Alpha: 0.52, Res:  32, f(x_p_d)=  1.0020 f(x_q)=  1.0042
+Itr:  19800 Kimg:     4534, Alpha: 0.53, Res:  32, f(x_p_d)=  1.1165 f(x_q)=  1.3368
+Itr:  19900 Kimg:     4547, Alpha: 0.55, Res:  32, f(x_p_d)=  1.2653 f(x_q)=  1.4776
+Itr:  20000 Kimg:     4560, Alpha: 0.56, Res:  32, f(x_p_d)=  1.3569 f(x_q)=  1.0340
+Itr:  20100 Kimg:     4573, Alpha: 0.57, Res:  32, f(x_p_d)=  1.2277 f(x_q)=  1.4161
+Itr:  20200 Kimg:     4585, Alpha: 0.59, Res:  32, f(x_p_d)=  1.2962 f(x_q)=  1.3893
+Itr:  20300 Kimg:     4598, Alpha: 0.60, Res:  32, f(x_p_d)=  1.4932 f(x_q)=  1.5402
+Itr:  20400 Kimg:     4611, Alpha: 0.61, Res:  32, f(x_p_d)=  1.7080 f(x_q)=  1.4100
+Itr:  20500 Kimg:     4624, Alpha: 0.62, Res:  32, f(x_p_d)=  1.7245 f(x_q)=  1.2842
+Itr:  20600 Kimg:     4637, Alpha: 0.64, Res:  32, f(x_p_d)=  1.5589 f(x_q)=  1.4477
+Itr:  20700 Kimg:     4649, Alpha: 0.65, Res:  32, f(x_p_d)=  1.8542 f(x_q)=  1.6914
+Itr:  20800 Kimg:     4662, Alpha: 0.66, Res:  32, f(x_p_d)=  1.8152 f(x_q)=  2.1366
+Itr:  20900 Kimg:     4675, Alpha: 0.68, Res:  32, f(x_p_d)=  1.6068 f(x_q)=  1.4056
+Itr:  21000 Kimg:     4688, Alpha: 0.69, Res:  32, f(x_p_d)=  1.6906 f(x_q)=  1.9069
+Itr:  21100 Kimg:     4701, Alpha: 0.70, Res:  32, f(x_p_d)=  2.0386 f(x_q)=  1.4773
+Itr:  21200 Kimg:     4713, Alpha: 0.71, Res:  32, f(x_p_d)=  1.7484 f(x_q)=  1.9829
+Itr:  21300 Kimg:     4726, Alpha: 0.73, Res:  32, f(x_p_d)=  2.0738 f(x_q)=  1.8513
+Itr:  21400 Kimg:     4739, Alpha: 0.74, Res:  32, f(x_p_d)=  1.8658 f(x_q)=  2.0247
+Itr:  21500 Kimg:     4752, Alpha: 0.75, Res:  32, f(x_p_d)=  2.3408 f(x_q)=  1.6395
+Itr:  21600 Kimg:     4765, Alpha: 0.76, Res:  32, f(x_p_d)=  2.2018 f(x_q)=  2.4148
+Itr:  21700 Kimg:     4777, Alpha: 0.78, Res:  32, f(x_p_d)=  2.7653 f(x_q)=  1.8570
+Itr:  21800 Kimg:     4790, Alpha: 0.79, Res:  32, f(x_p_d)=  2.3968 f(x_q)=  1.9569
+Itr:  21900 Kimg:     4803, Alpha: 0.80, Res:  32, f(x_p_d)=  3.1328 f(x_q)=  3.0337
+Itr:  22000 Kimg:     4816, Alpha: 0.82, Res:  32, f(x_p_d)=  2.7847 f(x_q)=  2.9437
+Itr:  22100 Kimg:     4829, Alpha: 0.83, Res:  32, f(x_p_d)=  3.0241 f(x_q)=  2.9416
+Itr:  22200 Kimg:     4841, Alpha: 0.84, Res:  32, f(x_p_d)=  3.2391 f(x_q)=  2.7233
+Itr:  22300 Kimg:     4854, Alpha: 0.85, Res:  32, f(x_p_d)=  3.7389 f(x_q)=  3.5335
+Itr:  22400 Kimg:     4867, Alpha: 0.87, Res:  32, f(x_p_d)=  3.4504 f(x_q)=  2.5373
+Itr:  22500 Kimg:     4880, Alpha: 0.88, Res:  32, f(x_p_d)=  3.4422 f(x_q)=  3.1904
+Itr:  22600 Kimg:     4893, Alpha: 0.89, Res:  32, f(x_p_d)=  3.5820 f(x_q)=  3.2464
+Itr:  22700 Kimg:     4905, Alpha: 0.91, Res:  32, f(x_p_d)=  4.0403 f(x_q)=  3.6177
+Itr:  22800 Kimg:     4918, Alpha: 0.92, Res:  32, f(x_p_d)=  4.9252 f(x_q)=  5.2272
+Itr:  22900 Kimg:     4931, Alpha: 0.93, Res:  32, f(x_p_d)=  4.9132 f(x_q)=  3.7199
+Itr:  23000 Kimg:     4944, Alpha: 0.94, Res:  32, f(x_p_d)=  5.1255 f(x_q)=  7.4119
+Itr:  23100 Kimg:     4957, Alpha: 0.96, Res:  32, f(x_p_d)=  5.8738 f(x_q)=  6.0339
+Itr:  23200 Kimg:     4969, Alpha: 0.97, Res:  32, f(x_p_d)=  5.7325 f(x_q)=  4.3502
+Itr:  23300 Kimg:     4982, Alpha: 0.98, Res:  32, f(x_p_d)=  5.1768 f(x_q)=  3.6990
+Itr:  23400 Kimg:     4995, Alpha: 1.00, Res:  32, f(x_p_d)=  4.2184 f(x_q)=  4.0279
+Itr:  23500 Kimg:     5008, Alpha: 1.00, Res:  32, f(x_p_d)=  4.4203 f(x_q)=  4.4183
+Itr:  23600 Kimg:     5021, Alpha: 1.00, Res:  32, f(x_p_d)=  4.4472 f(x_q)=  4.1311
+Itr:  23700 Kimg:     5033, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5425 f(x_q)=  5.5289
+Itr:  23800 Kimg:     5046, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3576 f(x_q)=  5.8726
+Itr:  23900 Kimg:     5059, Alpha: 1.00, Res:  32, f(x_p_d)=  5.4519 f(x_q)=  5.0675
+Itr:  24000 Kimg:     5072, Alpha: 1.00, Res:  32, f(x_p_d)=  5.2760 f(x_q)=  4.4644
+Calculate FID...
+Itr:  24000, FID:    59.137
+Itr:  24100 Kimg:     5085, Alpha: 1.00, Res:  32, f(x_p_d)=  6.1816 f(x_q)=  5.3435
+Itr:  24200 Kimg:     5097, Alpha: 1.00, Res:  32, f(x_p_d)=  5.0624 f(x_q)=  5.3125
+Itr:  24300 Kimg:     5110, Alpha: 1.00, Res:  32, f(x_p_d)=  6.7784 f(x_q)=  8.7529
+Itr:  24400 Kimg:     5123, Alpha: 1.00, Res:  32, f(x_p_d)=  6.1195 f(x_q)=  6.2557
+Itr:  24500 Kimg:     5136, Alpha: 1.00, Res:  32, f(x_p_d)=  6.5038 f(x_q)=  6.0321
+Itr:  24600 Kimg:     5149, Alpha: 1.00, Res:  32, f(x_p_d)=  5.5346 f(x_q)=  5.3425
+Itr:  24700 Kimg:     5161, Alpha: 1.00, Res:  32, f(x_p_d)=  6.3105 f(x_q)=  6.7759
+Itr:  24800 Kimg:     5174, Alpha: 1.00, Res:  32, f(x_p_d)=  5.7049 f(x_q)=  7.0208
+Itr:  24900 Kimg:     5187, Alpha: 1.00, Res:  32, f(x_p_d)=  6.2293 f(x_q)=  6.2662
+Itr:  25000 Kimg:     5200, Alpha: 1.00, Res:  32, f(x_p_d)=  5.6721 f(x_q)=  5.7084
+Itr:  25100 Kimg:     5213, Alpha: 1.00, Res:  32, f(x_p_d)=  5.6884 f(x_q)=  5.6691
+Itr:  25200 Kimg:     5225, Alpha: 1.00, Res:  32, f(x_p_d)=  5.7878 f(x_q)=  8.9053
+Itr:  25300 Kimg:     5238, Alpha: 1.00, Res:  32, f(x_p_d)=  7.3034 f(x_q)=  8.1986
+Itr:  25400 Kimg:     5251, Alpha: 1.00, Res:  32, f(x_p_d)=  6.0537 f(x_q)=  4.6118
+Itr:  25500 Kimg:     5264, Alpha: 1.00, Res:  32, f(x_p_d)=  5.2042 f(x_q)=  4.5692
+Itr:  25600 Kimg:     5277, Alpha: 1.00, Res:  32, f(x_p_d)=  5.2780 f(x_q)=  4.9997
+Itr:  25700 Kimg:     5289, Alpha: 1.00, Res:  32, f(x_p_d)=  5.4968 f(x_q)=  5.0789
+Itr:  25800 Kimg:     5302, Alpha: 1.00, Res:  32, f(x_p_d)=  6.3280 f(x_q)=  7.7581
+Itr:  25900 Kimg:     5315, Alpha: 1.00, Res:  32, f(x_p_d)=  6.2359 f(x_q)=  5.2240
+Itr:  26000 Kimg:     5328, Alpha: 1.00, Res:  32, f(x_p_d)=  6.0058 f(x_q)=  5.5503
+Calculate FID...
+Itr:  26000, FID:    45.560
+Itr:  26100 Kimg:     5341, Alpha: 1.00, Res:  32, f(x_p_d)=  5.1183 f(x_q)=  4.8663
+Itr:  26200 Kimg:     5353, Alpha: 1.00, Res:  32, f(x_p_d)=  6.2898 f(x_q)=  5.7437
+Itr:  26300 Kimg:     5366, Alpha: 1.00, Res:  32, f(x_p_d)=  6.5723 f(x_q)=  6.7637
+Itr:  26400 Kimg:     5379, Alpha: 1.00, Res:  32, f(x_p_d)=  5.0855 f(x_q)=  3.9496
+Itr:  26500 Kimg:     5392, Alpha: 1.00, Res:  32, f(x_p_d)=  6.5354 f(x_q)=  6.9973
+Itr:  26600 Kimg:     5405, Alpha: 1.00, Res:  32, f(x_p_d)=  6.6045 f(x_q)=  5.8754
+Itr:  26700 Kimg:     5417, Alpha: 1.00, Res:  32, f(x_p_d)=  5.3706 f(x_q)=  5.3106
+Itr:  26800 Kimg:     5430, Alpha: 1.00, Res:  32, f(x_p_d)=  5.6669 f(x_q)=  5.8798
+Itr:  26900 Kimg:     5443, Alpha: 1.00, Res:  32, f(x_p_d)=  5.6028 f(x_q)=  5.1651
+Itr:  27000 Kimg:     5456, Alpha: 1.00, Res:  32, f(x_p_d)=  6.3820 f(x_q)=  6.1413
+Itr:  27100 Kimg:     5469, Alpha: 1.00, Res:  32, f(x_p_d)=  5.8332 f(x_q)=  4.7872
+Itr:  27200 Kimg:     5481, Alpha: 1.00, Res:  32, f(x_p_d)=  5.6199 f(x_q)=  5.0701
+Itr:  27300 Kimg:     5494, Alpha: 1.00, Res:  32, f(x_p_d)=  6.3878 f(x_q)=  7.0988
+Itr:  27400 Kimg:     5507, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6047 f(x_q)=  4.8128
+Itr:  27500 Kimg:     5520, Alpha: 1.00, Res:  32, f(x_p_d)=  5.1435 f(x_q)=  4.0230
+Itr:  27600 Kimg:     5533, Alpha: 1.00, Res:  32, f(x_p_d)=  5.7703 f(x_q)=  7.2745
+Itr:  27700 Kimg:     5545, Alpha: 1.00, Res:  32, f(x_p_d)=  5.9047 f(x_q)=  6.2644
+Itr:  27800 Kimg:     5558, Alpha: 1.00, Res:  32, f(x_p_d)=  5.5745 f(x_q)=  5.9640
+Itr:  27900 Kimg:     5571, Alpha: 1.00, Res:  32, f(x_p_d)=  5.7989 f(x_q)=  4.3612
+Itr:  28000 Kimg:     5584, Alpha: 1.00, Res:  32, f(x_p_d)=  5.7952 f(x_q)=  5.0442
+Calculate FID...
+Itr:  28000, FID:    43.846
+Itr:  28100 Kimg:     5597, Alpha: 1.00, Res:  32, f(x_p_d)=  5.2629 f(x_q)=  4.5639
+Itr:  28200 Kimg:     5609, Alpha: 1.00, Res:  32, f(x_p_d)=  4.8465 f(x_q)=  4.8252
+Itr:  28300 Kimg:     5622, Alpha: 1.00, Res:  32, f(x_p_d)=  5.7321 f(x_q)=  6.3366
+Itr:  28400 Kimg:     5635, Alpha: 1.00, Res:  32, f(x_p_d)=  5.1126 f(x_q)=  4.7813
+Itr:  28500 Kimg:     5648, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7928 f(x_q)=  5.9458
+Itr:  28600 Kimg:     5661, Alpha: 1.00, Res:  32, f(x_p_d)=  4.8129 f(x_q)=  5.7125
+Itr:  28700 Kimg:     5673, Alpha: 1.00, Res:  32, f(x_p_d)=  6.6598 f(x_q)=  6.7011
+Itr:  28800 Kimg:     5686, Alpha: 1.00, Res:  32, f(x_p_d)=  5.8497 f(x_q)=  5.9244
+Itr:  28900 Kimg:     5699, Alpha: 1.00, Res:  32, f(x_p_d)=  5.3450 f(x_q)=  5.3935
+Itr:  29000 Kimg:     5712, Alpha: 1.00, Res:  32, f(x_p_d)=  6.2325 f(x_q)=  4.8140
+Itr:  29100 Kimg:     5725, Alpha: 1.00, Res:  32, f(x_p_d)=  6.1305 f(x_q)=  6.3890
+Itr:  29200 Kimg:     5737, Alpha: 1.00, Res:  32, f(x_p_d)=  5.2540 f(x_q)=  5.4201
+Itr:  29300 Kimg:     5750, Alpha: 1.00, Res:  32, f(x_p_d)=  5.9447 f(x_q)=  6.0062
+Itr:  29400 Kimg:     5763, Alpha: 1.00, Res:  32, f(x_p_d)=  6.3470 f(x_q)=  7.1651
+Itr:  29500 Kimg:     5776, Alpha: 1.00, Res:  32, f(x_p_d)=  5.3831 f(x_q)=  5.7168
+Itr:  29600 Kimg:     5789, Alpha: 1.00, Res:  32, f(x_p_d)=  5.8072 f(x_q)=  4.6997
+Itr:  29700 Kimg:     5801, Alpha: 1.00, Res:  32, f(x_p_d)=  5.4899 f(x_q)=  6.2156
+Itr:  29800 Kimg:     5814, Alpha: 1.00, Res:  32, f(x_p_d)=  5.5722 f(x_q)=  5.5211
+Itr:  29900 Kimg:     5827, Alpha: 1.00, Res:  32, f(x_p_d)=  5.3593 f(x_q)=  5.9330
+Itr:  30000 Kimg:     5840, Alpha: 1.00, Res:  32, f(x_p_d)=  5.5871 f(x_q)=  4.9824
+Calculate FID...
+Itr:  30000, FID:    40.733
+Itr:  30100 Kimg:     5853, Alpha: 1.00, Res:  32, f(x_p_d)=  5.7406 f(x_q)=  6.4244
+Itr:  30200 Kimg:     5865, Alpha: 1.00, Res:  32, f(x_p_d)=  5.5310 f(x_q)=  5.1733
+Itr:  30300 Kimg:     5878, Alpha: 1.00, Res:  32, f(x_p_d)=  5.6039 f(x_q)=  5.4994
+Itr:  30400 Kimg:     5891, Alpha: 1.00, Res:  32, f(x_p_d)=  5.8934 f(x_q)=  5.4907
+Itr:  30500 Kimg:     5904, Alpha: 1.00, Res:  32, f(x_p_d)=  5.6393 f(x_q)=  6.0760
+Itr:  30600 Kimg:     5917, Alpha: 1.00, Res:  32, f(x_p_d)=  5.9404 f(x_q)=  5.8042
+Itr:  30700 Kimg:     5929, Alpha: 1.00, Res:  32, f(x_p_d)=  5.2401 f(x_q)=  3.7353
+Itr:  30800 Kimg:     5942, Alpha: 1.00, Res:  32, f(x_p_d)=  5.9326 f(x_q)=  6.5783
+Itr:  30900 Kimg:     5955, Alpha: 1.00, Res:  32, f(x_p_d)=  6.5226 f(x_q)=  6.4248
+Itr:  31000 Kimg:     5968, Alpha: 1.00, Res:  32, f(x_p_d)=  6.3872 f(x_q)= 11.6042
+Itr:  31100 Kimg:     5981, Alpha: 1.00, Res:  32, f(x_p_d)=  5.6667 f(x_q)=  4.7023
+Itr:  31200 Kimg:     5993, Alpha: 1.00, Res:  32, f(x_p_d)=  5.5963 f(x_q)=  4.9042
+Itr:  31300 Kimg:     6006, Alpha: 1.00, Res:  32, f(x_p_d)=  6.2444 f(x_q)=  5.7907
+Itr:  31400 Kimg:     6019, Alpha: 1.00, Res:  32, f(x_p_d)=  6.1454 f(x_q)=  5.4781
+Itr:  31500 Kimg:     6032, Alpha: 1.00, Res:  32, f(x_p_d)=  5.2614 f(x_q)=  5.6753
+Itr:  31600 Kimg:     6045, Alpha: 1.00, Res:  32, f(x_p_d)=  4.8837 f(x_q)=  6.1722
+Itr:  31700 Kimg:     6057, Alpha: 1.00, Res:  32, f(x_p_d)=  6.2862 f(x_q)=  9.7910
+Itr:  31800 Kimg:     6070, Alpha: 1.00, Res:  32, f(x_p_d)=  5.9098 f(x_q)=  5.9386
+Itr:  31900 Kimg:     6083, Alpha: 1.00, Res:  32, f(x_p_d)=  5.8299 f(x_q)=  6.6430
+Itr:  32000 Kimg:     6096, Alpha: 1.00, Res:  32, f(x_p_d)=  5.5621 f(x_q)=  5.9376
+Calculate FID...
+Itr:  32000, FID:    37.575
+Itr:  32100 Kimg:     6109, Alpha: 1.00, Res:  32, f(x_p_d)=  6.0171 f(x_q)=  7.0812
+Itr:  32200 Kimg:     6121, Alpha: 1.00, Res:  32, f(x_p_d)=  5.3031 f(x_q)=  4.0859
+Itr:  32300 Kimg:     6134, Alpha: 1.00, Res:  32, f(x_p_d)=  6.0975 f(x_q)=  5.7451
+Itr:  32400 Kimg:     6147, Alpha: 1.00, Res:  32, f(x_p_d)=  6.2115 f(x_q)=  5.5737
+Itr:  32500 Kimg:     6160, Alpha: 1.00, Res:  32, f(x_p_d)=  6.0254 f(x_q)=  5.9916
+Itr:  32600 Kimg:     6173, Alpha: 1.00, Res:  32, f(x_p_d)=  5.3198 f(x_q)=  5.4368
+Itr:  32700 Kimg:     6185, Alpha: 1.00, Res:  32, f(x_p_d)=  6.7262 f(x_q)=  6.5916
+Itr:  32800 Kimg:     6198, Alpha: 1.00, Res:  32, f(x_p_d)=  5.9033 f(x_q)=  5.4724
+Itr:  32900 Kimg:     6211, Alpha: 1.00, Res:  32, f(x_p_d)=  5.4836 f(x_q)=  4.8406
+Itr:  33000 Kimg:     6224, Alpha: 1.00, Res:  32, f(x_p_d)=  5.1509 f(x_q)=  5.3311
+Itr:  33100 Kimg:     6237, Alpha: 1.00, Res:  32, f(x_p_d)=  6.3953 f(x_q)=  7.1258
+Itr:  33200 Kimg:     6249, Alpha: 1.00, Res:  32, f(x_p_d)=  5.2265 f(x_q)=  6.0301
+Itr:  33300 Kimg:     6262, Alpha: 1.00, Res:  32, f(x_p_d)=  5.1772 f(x_q)=  5.9177
+Itr:  33400 Kimg:     6275, Alpha: 1.00, Res:  32, f(x_p_d)=  5.7892 f(x_q)=  5.4418
+Itr:  33500 Kimg:     6288, Alpha: 1.00, Res:  32, f(x_p_d)=  5.5346 f(x_q)=  5.5115
+Itr:  33600 Kimg:     6301, Alpha: 1.00, Res:  32, f(x_p_d)=  6.8220 f(x_q)=  6.3480
+Itr:  33700 Kimg:     6313, Alpha: 1.00, Res:  32, f(x_p_d)=  5.1702 f(x_q)=  7.4454
+Itr:  33800 Kimg:     6326, Alpha: 1.00, Res:  32, f(x_p_d)=  5.1752 f(x_q)=  9.8983
+Itr:  33900 Kimg:     6339, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9396 f(x_q)=  5.6961
+Itr:  34000 Kimg:     6352, Alpha: 1.00, Res:  32, f(x_p_d)=  5.2798 f(x_q)=  6.5639
+Calculate FID...
+Itr:  34000, FID:    29.693
+Itr:  34100 Kimg:     6365, Alpha: 1.00, Res:  32, f(x_p_d)=  5.3940 f(x_q)=  4.1284
+Itr:  34200 Kimg:     6377, Alpha: 1.00, Res:  32, f(x_p_d)=  5.2883 f(x_q)=  5.9078
+Itr:  34300 Kimg:     6390, Alpha: 1.00, Res:  32, f(x_p_d)=  5.7776 f(x_q)=  4.4648
+Itr:  34400 Kimg:     6403, Alpha: 1.00, Res:  32, f(x_p_d)=  5.4026 f(x_q)=  5.3400
+Itr:  34500 Kimg:     6416, Alpha: 1.00, Res:  32, f(x_p_d)=  5.0449 f(x_q)=  5.9314
+Itr:  34600 Kimg:     6429, Alpha: 1.00, Res:  32, f(x_p_d)=  5.9039 f(x_q)=  5.3763
+Itr:  34700 Kimg:     6441, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5111 f(x_q)=  4.4769
+Itr:  34800 Kimg:     6454, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3750 f(x_q)=  4.7203
+Itr:  34900 Kimg:     6467, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9138 f(x_q)=  5.5192
+Itr:  35000 Kimg:     6480, Alpha: 1.00, Res:  32, f(x_p_d)=  5.7235 f(x_q)=  6.0455
+Itr:  35100 Kimg:     6493, Alpha: 1.00, Res:  32, f(x_p_d)=  5.6655 f(x_q)=  5.8206
+Itr:  35200 Kimg:     6505, Alpha: 1.00, Res:  32, f(x_p_d)=  4.8863 f(x_q)=  5.9698
+Itr:  35300 Kimg:     6518, Alpha: 1.00, Res:  32, f(x_p_d)=  5.1859 f(x_q)=  4.4827
+Itr:  35400 Kimg:     6531, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6855 f(x_q)=  5.1070
+Itr:  35500 Kimg:     6544, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3278 f(x_q)=  5.1452
+Itr:  35600 Kimg:     6557, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3097 f(x_q)=  4.2423
+Itr:  35700 Kimg:     6569, Alpha: 1.00, Res:  32, f(x_p_d)=  4.8186 f(x_q)=  4.9107
+Itr:  35800 Kimg:     6582, Alpha: 1.00, Res:  32, f(x_p_d)=  5.3587 f(x_q)=  6.0449
+Itr:  35900 Kimg:     6595, Alpha: 1.00, Res:  32, f(x_p_d)=  5.7290 f(x_q)=  4.4796
+Itr:  36000 Kimg:     6608, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9898 f(x_q)=  5.0679
+Calculate FID...
+Itr:  36000, FID:    32.236
+Itr:  36100 Kimg:     6621, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5676 f(x_q)=  5.1468
+Itr:  36200 Kimg:     6633, Alpha: 1.00, Res:  32, f(x_p_d)=  5.0316 f(x_q)=  5.0213
+Itr:  36300 Kimg:     6646, Alpha: 1.00, Res:  32, f(x_p_d)=  4.1889 f(x_q)=  4.1594
+Itr:  36400 Kimg:     6659, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9821 f(x_q)=  5.0032
+Itr:  36500 Kimg:     6672, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5219 f(x_q)=  4.1338
+Itr:  36600 Kimg:     6685, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3102 f(x_q)=  4.7067
+Itr:  36700 Kimg:     6697, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7150 f(x_q)=  3.8882
+Itr:  36800 Kimg:     6710, Alpha: 1.00, Res:  32, f(x_p_d)=  5.0454 f(x_q)=  4.0191
+Itr:  36900 Kimg:     6723, Alpha: 1.00, Res:  32, f(x_p_d)=  5.1809 f(x_q)=  6.4759
+Itr:  37000 Kimg:     6736, Alpha: 1.00, Res:  32, f(x_p_d)=  5.7446 f(x_q)=  4.7881
+Itr:  37100 Kimg:     6749, Alpha: 1.00, Res:  32, f(x_p_d)=  3.9389 f(x_q)=  4.6323
+Itr:  37200 Kimg:     6761, Alpha: 1.00, Res:  32, f(x_p_d)=  4.2978 f(x_q)=  7.6920
+Itr:  37300 Kimg:     6774, Alpha: 1.00, Res:  32, f(x_p_d)=  5.0601 f(x_q)=  4.1600
+Itr:  37400 Kimg:     6787, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6730 f(x_q)=  5.2203
+Itr:  37500 Kimg:     6800, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7731 f(x_q)=  5.4490
+Itr:  37600 Kimg:     6813, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7788 f(x_q)=  5.3584
+Itr:  37700 Kimg:     6825, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6228 f(x_q)=  4.7239
+Itr:  37800 Kimg:     6838, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9302 f(x_q)=  5.0804
+Itr:  37900 Kimg:     6851, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5750 f(x_q)=  4.2139
+Itr:  38000 Kimg:     6864, Alpha: 1.00, Res:  32, f(x_p_d)=  4.2275 f(x_q)=  5.0911
+Calculate FID...
+Itr:  38000, FID:    30.287
+Itr:  38100 Kimg:     6877, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9136 f(x_q)=  4.6122
+Itr:  38200 Kimg:     6889, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6005 f(x_q)=  3.7838
+Itr:  38300 Kimg:     6902, Alpha: 1.00, Res:  32, f(x_p_d)=  4.4714 f(x_q)=  4.6555
+Itr:  38400 Kimg:     6915, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6292 f(x_q)=  8.1274
+Itr:  38500 Kimg:     6928, Alpha: 1.00, Res:  32, f(x_p_d)=  4.0016 f(x_q)=  4.7326
+Itr:  38600 Kimg:     6941, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5835 f(x_q)=  4.4157
+Itr:  38700 Kimg:     6953, Alpha: 1.00, Res:  32, f(x_p_d)=  4.0830 f(x_q)=  3.7555
+Itr:  38800 Kimg:     6966, Alpha: 1.00, Res:  32, f(x_p_d)=  4.1791 f(x_q)=  3.4984
+Itr:  38900 Kimg:     6979, Alpha: 1.00, Res:  32, f(x_p_d)=  4.8772 f(x_q)=  4.7139
+Itr:  39000 Kimg:     6992, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5838 f(x_q)=  4.4596
+Itr:  39100 Kimg:     7005, Alpha: 1.00, Res:  32, f(x_p_d)=  4.2546 f(x_q)=  4.7546
+Itr:  39200 Kimg:     7017, Alpha: 1.00, Res:  32, f(x_p_d)=  3.5405 f(x_q)=  3.3043
+Itr:  39300 Kimg:     7030, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3027 f(x_q)=  6.5689
+Itr:  39400 Kimg:     7043, Alpha: 1.00, Res:  32, f(x_p_d)=  4.2740 f(x_q)=  4.2765
+Itr:  39500 Kimg:     7056, Alpha: 1.00, Res:  32, f(x_p_d)=  5.0328 f(x_q)=  3.9555
+Itr:  39600 Kimg:     7069, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9111 f(x_q)=  4.7809
+Itr:  39700 Kimg:     7081, Alpha: 1.00, Res:  32, f(x_p_d)=  3.9383 f(x_q)=  5.0730
+Itr:  39800 Kimg:     7094, Alpha: 1.00, Res:  32, f(x_p_d)=  4.0778 f(x_q)=  4.2924
+Itr:  39900 Kimg:     7107, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3479 f(x_q)=  3.7652
+Itr:  40000 Kimg:     7120, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6684 f(x_q)=  4.0592
+Calculate FID...
+Itr:  40000, FID:    30.329
+Itr:  40100 Kimg:     7133, Alpha: 1.00, Res:  32, f(x_p_d)=  5.5609 f(x_q)=  4.8513
+Itr:  40200 Kimg:     7145, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9115 f(x_q)=  4.3845
+Itr:  40300 Kimg:     7158, Alpha: 1.00, Res:  32, f(x_p_d)=  4.2837 f(x_q)=  5.2976
+Itr:  40400 Kimg:     7171, Alpha: 1.00, Res:  32, f(x_p_d)=  5.1655 f(x_q)=  4.0819
+Itr:  40500 Kimg:     7184, Alpha: 1.00, Res:  32, f(x_p_d)=  5.0960 f(x_q)=  4.7702
+Itr:  40600 Kimg:     7197, Alpha: 1.00, Res:  32, f(x_p_d)=  4.2371 f(x_q)=  3.7345
+Itr:  40700 Kimg:     7209, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3752 f(x_q)=  5.2900
+Itr:  40800 Kimg:     7222, Alpha: 1.00, Res:  32, f(x_p_d)=  4.8744 f(x_q)=  5.1969
+Itr:  40900 Kimg:     7235, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9136 f(x_q)=  5.0575
+Itr:  41000 Kimg:     7248, Alpha: 1.00, Res:  32, f(x_p_d)=  4.2470 f(x_q)=  3.9836
+Itr:  41100 Kimg:     7261, Alpha: 1.00, Res:  32, f(x_p_d)=  4.4554 f(x_q)=  3.6928
+Itr:  41200 Kimg:     7273, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7558 f(x_q)=  5.3020
+Itr:  41300 Kimg:     7286, Alpha: 1.00, Res:  32, f(x_p_d)=  4.4561 f(x_q)=  2.9658
+Itr:  41400 Kimg:     7299, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3032 f(x_q)=  4.0330
+Itr:  41500 Kimg:     7312, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7647 f(x_q)=  4.0709
+Itr:  41600 Kimg:     7325, Alpha: 1.00, Res:  32, f(x_p_d)=  4.4538 f(x_q)=  4.2137
+Itr:  41700 Kimg:     7337, Alpha: 1.00, Res:  32, f(x_p_d)=  4.8877 f(x_q)=  5.0137
+Itr:  41800 Kimg:     7350, Alpha: 1.00, Res:  32, f(x_p_d)=  3.6873 f(x_q)=  3.3907
+Itr:  41900 Kimg:     7363, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7382 f(x_q)=  3.9943
+Itr:  42000 Kimg:     7376, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7110 f(x_q)=  5.2628
+Calculate FID...
+Itr:  42000, FID:    26.706
+Itr:  42100 Kimg:     7389, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5274 f(x_q)=  2.9161
+Itr:  42200 Kimg:     7401, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6826 f(x_q)=  2.5588
+Itr:  42300 Kimg:     7414, Alpha: 1.00, Res:  32, f(x_p_d)=  4.1551 f(x_q)=  4.9448
+Itr:  42400 Kimg:     7427, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9659 f(x_q)=  5.0593
+Itr:  42500 Kimg:     7440, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6505 f(x_q)=  4.7242
+Itr:  42600 Kimg:     7453, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6508 f(x_q)=  4.4263
+Itr:  42700 Kimg:     7465, Alpha: 1.00, Res:  32, f(x_p_d)=  3.9876 f(x_q)=  4.6995
+Itr:  42800 Kimg:     7478, Alpha: 1.00, Res:  32, f(x_p_d)=  5.3126 f(x_q)=  4.9965
+Itr:  42900 Kimg:     7491, Alpha: 1.00, Res:  32, f(x_p_d)=  5.5879 f(x_q)=  4.9953
+Itr:  43000 Kimg:     7504, Alpha: 1.00, Res:  32, f(x_p_d)=  4.8302 f(x_q)=  5.9130
+Itr:  43100 Kimg:     7517, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7512 f(x_q)=  4.6429
+Itr:  43200 Kimg:     7529, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9732 f(x_q)=  5.2897
+Itr:  43300 Kimg:     7542, Alpha: 1.00, Res:  32, f(x_p_d)=  4.2080 f(x_q)=  3.8149
+Itr:  43400 Kimg:     7555, Alpha: 1.00, Res:  32, f(x_p_d)=  4.4599 f(x_q)=  4.8367
+Itr:  43500 Kimg:     7568, Alpha: 1.00, Res:  32, f(x_p_d)=  5.0978 f(x_q)=  5.1125
+Itr:  43600 Kimg:     7581, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9022 f(x_q)=  5.1814
+Itr:  43700 Kimg:     7593, Alpha: 1.00, Res:  32, f(x_p_d)=  5.3211 f(x_q)=  7.4720
+Itr:  43800 Kimg:     7606, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6436 f(x_q)=  4.9233
+Itr:  43900 Kimg:     7619, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5293 f(x_q)=  3.0679
+Itr:  44000 Kimg:     7632, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9800 f(x_q)=  4.9927
+Calculate FID...
+Itr:  44000, FID:    27.073
+Itr:  44100 Kimg:     7645, Alpha: 1.00, Res:  32, f(x_p_d)=  4.2229 f(x_q)=  3.7280
+Itr:  44200 Kimg:     7657, Alpha: 1.00, Res:  32, f(x_p_d)=  4.8732 f(x_q)=  5.5236
+Itr:  44300 Kimg:     7670, Alpha: 1.00, Res:  32, f(x_p_d)=  5.0185 f(x_q)=  5.6610
+Itr:  44400 Kimg:     7683, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3960 f(x_q)=  3.1398
+Itr:  44500 Kimg:     7696, Alpha: 1.00, Res:  32, f(x_p_d)=  4.4166 f(x_q)=  4.2801
+Itr:  44600 Kimg:     7709, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3859 f(x_q)=  5.2924
+Itr:  44700 Kimg:     7721, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3161 f(x_q)=  3.9967
+Itr:  44800 Kimg:     7734, Alpha: 1.00, Res:  32, f(x_p_d)=  3.8366 f(x_q)=  3.6283
+Itr:  44900 Kimg:     7747, Alpha: 1.00, Res:  32, f(x_p_d)=  5.0492 f(x_q)=  7.3077
+Itr:  45000 Kimg:     7760, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5730 f(x_q)=  4.7583
+Itr:  45100 Kimg:     7773, Alpha: 1.00, Res:  32, f(x_p_d)=  5.2360 f(x_q)=  3.9054
+Itr:  45200 Kimg:     7785, Alpha: 1.00, Res:  32, f(x_p_d)=  6.1966 f(x_q)=  4.7933
+Itr:  45300 Kimg:     7798, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7235 f(x_q)=  3.9682
+Itr:  45400 Kimg:     7811, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6571 f(x_q)=  3.9870
+Itr:  45500 Kimg:     7824, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3742 f(x_q)=  8.8912
+Itr:  45600 Kimg:     7837, Alpha: 1.00, Res:  32, f(x_p_d)=  4.1006 f(x_q)=  4.2778
+Itr:  45700 Kimg:     7849, Alpha: 1.00, Res:  32, f(x_p_d)=  4.8192 f(x_q)=  4.3233
+Itr:  45800 Kimg:     7862, Alpha: 1.00, Res:  32, f(x_p_d)=  5.0762 f(x_q)=  6.6457
+Itr:  45900 Kimg:     7875, Alpha: 1.00, Res:  32, f(x_p_d)=  4.1446 f(x_q)=  3.6954
+Itr:  46000 Kimg:     7888, Alpha: 1.00, Res:  32, f(x_p_d)=  5.1249 f(x_q)=  5.9205
+Calculate FID...
+Itr:  46000, FID:    30.881
+Itr:  46100 Kimg:     7901, Alpha: 1.00, Res:  32, f(x_p_d)=  5.6196 f(x_q)=  4.3948
+Itr:  46200 Kimg:     7913, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7431 f(x_q)=  4.3683
+Itr:  46300 Kimg:     7926, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6316 f(x_q)=  4.4220
+Itr:  46400 Kimg:     7939, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7061 f(x_q)=  4.3156
+Itr:  46500 Kimg:     7952, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7876 f(x_q)=  5.5947
+Itr:  46600 Kimg:     7965, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6952 f(x_q)=  5.6094
+Itr:  46700 Kimg:     7977, Alpha: 1.00, Res:  32, f(x_p_d)=  3.8939 f(x_q)=  4.1870
+Itr:  46800 Kimg:     7990, Alpha: 1.00, Res:  32, f(x_p_d)=  3.7828 f(x_q)=  3.1986
+Itr:  46900 Kimg:     8003, Alpha: 1.00, Res:  32, f(x_p_d)=  5.1082 f(x_q)=  4.4233
+Itr:  47000 Kimg:     8016, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5086 f(x_q)=  5.1913
+Itr:  47100 Kimg:     8029, Alpha: 1.00, Res:  32, f(x_p_d)=  5.9456 f(x_q)=  5.7125
+Itr:  47200 Kimg:     8041, Alpha: 1.00, Res:  32, f(x_p_d)=  4.4950 f(x_q)=  4.5619
+Itr:  47300 Kimg:     8054, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5051 f(x_q)=  4.0783
+Itr:  47400 Kimg:     8067, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3167 f(x_q)=  4.0043
+Itr:  47500 Kimg:     8080, Alpha: 1.00, Res:  32, f(x_p_d)=  4.8906 f(x_q)=  4.9915
+Itr:  47600 Kimg:     8093, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3842 f(x_q)=  3.7638
+Itr:  47700 Kimg:     8105, Alpha: 1.00, Res:  32, f(x_p_d)=  5.8830 f(x_q)=  5.0480
+Itr:  47800 Kimg:     8118, Alpha: 1.00, Res:  32, f(x_p_d)=  3.7979 f(x_q)=  6.5538
+Itr:  47900 Kimg:     8131, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9776 f(x_q)=  3.6822
+Itr:  48000 Kimg:     8144, Alpha: 1.00, Res:  32, f(x_p_d)=  4.0512 f(x_q)=  4.6170
+Calculate FID...
+Itr:  48000, FID:    26.147
+Itr:  48100 Kimg:     8157, Alpha: 1.00, Res:  32, f(x_p_d)=  3.6413 f(x_q)=  3.5225
+Itr:  48200 Kimg:     8169, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6627 f(x_q)=  4.5606
+Itr:  48300 Kimg:     8182, Alpha: 1.00, Res:  32, f(x_p_d)=  4.9736 f(x_q)=  4.3479
+Itr:  48400 Kimg:     8195, Alpha: 1.00, Res:  32, f(x_p_d)=  3.8511 f(x_q)=  4.1739
+Itr:  48500 Kimg:     8208, Alpha: 1.00, Res:  32, f(x_p_d)=  4.1183 f(x_q)=  3.4107
+Itr:  48600 Kimg:     8221, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6697 f(x_q)=  4.2956
+Itr:  48700 Kimg:     8233, Alpha: 1.00, Res:  32, f(x_p_d)=  3.7059 f(x_q)=  3.6110
+Itr:  48800 Kimg:     8246, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6450 f(x_q)=  4.5311
+Itr:  48900 Kimg:     8259, Alpha: 1.00, Res:  32, f(x_p_d)=  3.8381 f(x_q)=  4.6279
+Itr:  49000 Kimg:     8272, Alpha: 1.00, Res:  32, f(x_p_d)=  3.6296 f(x_q)=  3.4645
+Itr:  49100 Kimg:     8285, Alpha: 1.00, Res:  32, f(x_p_d)=  4.6115 f(x_q)=  4.8676
+Itr:  49200 Kimg:     8297, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5733 f(x_q)=  3.2509
+Itr:  49300 Kimg:     8310, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5987 f(x_q)=  4.3630
+Itr:  49400 Kimg:     8323, Alpha: 1.00, Res:  32, f(x_p_d)=  4.0462 f(x_q)=  3.5489
+Itr:  49500 Kimg:     8336, Alpha: 1.00, Res:  32, f(x_p_d)=  3.8470 f(x_q)=  4.5177
+Itr:  49600 Kimg:     8349, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5600 f(x_q)=  4.2573
+Itr:  49700 Kimg:     8361, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3002 f(x_q)=  5.2308
+Itr:  49800 Kimg:     8374, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3586 f(x_q)=  3.9911
+Itr:  49900 Kimg:     8387, Alpha: 1.00, Res:  32, f(x_p_d)=  4.1458 f(x_q)=  4.2377
+Itr:  50000 Kimg:     8400, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5136 f(x_q)=  6.2827
+Calculate FID...
+Itr:  50000, FID:    29.159
+Itr:  50100 Kimg:     8413, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5449 f(x_q)=  5.0671
+Itr:  50200 Kimg:     8425, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7736 f(x_q)=  5.1526
+Itr:  50300 Kimg:     8438, Alpha: 1.00, Res:  32, f(x_p_d)=  4.0086 f(x_q)=  4.7005
+Itr:  50400 Kimg:     8451, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3292 f(x_q)=  5.0179
+Itr:  50500 Kimg:     8464, Alpha: 1.00, Res:  32, f(x_p_d)=  4.4177 f(x_q)=  3.9517
+Itr:  50600 Kimg:     8477, Alpha: 1.00, Res:  32, f(x_p_d)=  2.1305 f(x_q)=  0.5366
+Itr:  50700 Kimg:     8489, Alpha: 1.00, Res:  32, f(x_p_d)=  3.9386 f(x_q)=  3.6337
+Itr:  50800 Kimg:     8502, Alpha: 1.00, Res:  32, f(x_p_d)=  2.8473 f(x_q)=  3.2735
+Itr:  50900 Kimg:     8515, Alpha: 1.00, Res:  32, f(x_p_d)=  4.0971 f(x_q)=  3.7126
+Itr:  51000 Kimg:     8528, Alpha: 1.00, Res:  32, f(x_p_d)=  5.0040 f(x_q)=  5.3915
+Itr:  51100 Kimg:     8541, Alpha: 1.00, Res:  32, f(x_p_d)=  4.7917 f(x_q)=  4.1315
+Itr:  51200 Kimg:     8553, Alpha: 1.00, Res:  32, f(x_p_d)=  4.3570 f(x_q)=  3.7146
+Itr:  51300 Kimg:     8566, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5516 f(x_q)=  4.8995
+Itr:  51400 Kimg:     8579, Alpha: 1.00, Res:  32, f(x_p_d)=  3.9502 f(x_q)=  4.0632
+Itr:  51500 Kimg:     8592, Alpha: 1.00, Res:  32, f(x_p_d)=  3.8610 f(x_q)=  5.0325
+Itr:  51600 Kimg:     8605, Alpha: 1.00, Res:  32, f(x_p_d)=  4.5966 f(x_q)=  2.9239
+Itr:  51700 Kimg:     8617, Alpha: 1.00, Res:  32, f(x_p_d)=  3.3772 f(x_q)=  2.4456
+Itr:  51800 Kimg:     8630, Alpha: 1.00, Res:  32, f(x_p_d)=  5.2555 f(x_q)=  2.0324
+Itr:  51900 Kimg:     8643, Alpha: 1.00, Res:  32, f(x_p_d)=-206374.6094 f(x_q)=-2883452.5000
+Itr:  52000 Kimg:     8656, Alpha: 1.00, Res:  32, f(x_p_d)=-429486.5000 f(x_q)=-3963045.2500
+Calculate FID...
+Itr:  52000, FID:   458.461
+Itr:  52100 Kimg:     8669, Alpha: 1.00, Res:  32, f(x_p_d)=-900176.3750 f(x_q)=-9337764.0000
+Itr:  52200 Kimg:     8681, Alpha: 1.00, Res:  32, f(x_p_d)=-1776826.2500 f(x_q)=-20630084.0000
+Itr:  52300 Kimg:     8694, Alpha: 1.00, Res:  32, f(x_p_d)=-2093134.8750 f(x_q)=-20297556.0000
+Itr:  52400 Kimg:     8707, Alpha: 1.00, Res:  32, f(x_p_d)=-2794642.0000 f(x_q)=-26471752.0000
+Itr:  52500 Kimg:     8720, Alpha: 1.00, Res:  32, f(x_p_d)=-3399911.5000 f(x_q)=-33038704.0000
+Itr:  52600 Kimg:     8733, Alpha: 1.00, Res:  32, f(x_p_d)=-4618814.0000 f(x_q)=-41608840.0000
+Itr:  52700 Kimg:     8745, Alpha: 1.00, Res:  32, f(x_p_d)=-5855083.0000 f(x_q)=-47556840.0000
+Itr:  52800 Kimg:     8758, Alpha: 1.00, Res:  32, f(x_p_d)=-7972871.0000 f(x_q)=-57955340.0000
+Itr:  52900 Kimg:     8771, Alpha: 1.00, Res:  32, f(x_p_d)=-9957174.0000 f(x_q)=-70260272.0000
+Itr:  53000 Kimg:     8784, Alpha: 1.00, Res:  32, f(x_p_d)=-10099968.0000 f(x_q)=-68864248.0000
+Itr:  53100 Kimg:     8797, Alpha: 1.00, Res:  32, f(x_p_d)=-12937611.0000 f(x_q)=-93010616.0000
+Itr:  53200 Kimg:     8809, Alpha: 1.00, Res:  32, f(x_p_d)=-14153824.0000 f(x_q)=-96401488.0000
+Itr:  53300 Kimg:     8822, Alpha: 1.00, Res:  32, f(x_p_d)=-16537816.0000 f(x_q)=-124263680.0000
+Itr:  53400 Kimg:     8835, Alpha: 1.00, Res:  32, f(x_p_d)=-19528820.0000 f(x_q)=-114594120.0000
+Itr:  53500 Kimg:     8848, Alpha: 1.00, Res:  32, f(x_p_d)=-23956860.0000 f(x_q)=-149630432.0000
+Itr:  53600 Kimg:     8861, Alpha: 1.00, Res:  32, f(x_p_d)=-27962040.0000 f(x_q)=-174731664.0000
+Itr:  53700 Kimg:     8873, Alpha: 1.00, Res:  32, f(x_p_d)=-27928532.0000 f(x_q)=-179328416.0000
+Itr:  53800 Kimg:     8886, Alpha: 1.00, Res:  32, f(x_p_d)=-35800232.0000 f(x_q)=-220067280.0000
+Itr:  53900 Kimg:     8899, Alpha: 1.00, Res:  32, f(x_p_d)=-38714328.0000 f(x_q)=-247794672.0000
+Itr:  54000 Kimg:     8912, Alpha: 1.00, Res:  32, f(x_p_d)=-41114152.0000 f(x_q)=-232616224.0000
+Calculate FID...
+Itr:  54000, FID:   514.150
+Itr:  54100 Kimg:     8925, Alpha: 1.00, Res:  32, f(x_p_d)=-46506912.0000 f(x_q)=-285935488.0000
+Itr:  54200 Kimg:     8937, Alpha: 1.00, Res:  32, f(x_p_d)=-54909548.0000 f(x_q)=-283767680.0000
+Itr:  54300 Kimg:     8950, Alpha: 1.00, Res:  32, f(x_p_d)=-54555960.0000 f(x_q)=-309938560.0000
+Itr:  54400 Kimg:     8963, Alpha: 1.00, Res:  32, f(x_p_d)=-75443560.0000 f(x_q)=-405988416.0000
+Itr:  54500 Kimg:     8976, Alpha: 1.00, Res:  32, f(x_p_d)=-67057892.0000 f(x_q)=-398777568.0000
+Itr:  54600 Kimg:     8989, Alpha: 1.00, Res:  32, f(x_p_d)=-64685844.0000 f(x_q)=-371390240.0000
+Itr:  54700 Kimg:     9001, Alpha: 1.00, Res:  32, f(x_p_d)=-65486728.0000 f(x_q)=-400488448.0000
+Itr:  54800 Kimg:     9014, Alpha: 1.00, Res:  32, f(x_p_d)=-79048272.0000 f(x_q)=-450140288.0000
+Itr:  54900 Kimg:     9027, Alpha: 1.00, Res:  32, f(x_p_d)=-92855200.0000 f(x_q)=-492205344.0000
+Itr:  55000 Kimg:     9040, Alpha: 1.00, Res:  32, f(x_p_d)=-95774040.0000 f(x_q)=-502784480.0000
+Itr:  55100 Kimg:     9053, Alpha: 1.00, Res:  32, f(x_p_d)=-104603352.0000 f(x_q)=-552159936.0000
+Itr:  55200 Kimg:     9065, Alpha: 1.00, Res:  32, f(x_p_d)=-108864816.0000 f(x_q)=-573396800.0000
+Itr:  55300 Kimg:     9078, Alpha: 1.00, Res:  32, f(x_p_d)=-106082432.0000 f(x_q)=-619518464.0000
+Itr:  55400 Kimg:     9091, Alpha: 1.00, Res:  32, f(x_p_d)=-120705184.0000 f(x_q)=-626199808.0000
+Itr:  55500 Kimg:     9104, Alpha: 1.00, Res:  32, f(x_p_d)=-106491296.0000 f(x_q)=-600468096.0000
+Itr:  55600 Kimg:     9117, Alpha: 1.00, Res:  32, f(x_p_d)=-143757120.0000 f(x_q)=-781428608.0000
+Itr:  55700 Kimg:     9129, Alpha: 1.00, Res:  32, f(x_p_d)=-141718560.0000 f(x_q)=-777519936.0000
+Itr:  55800 Kimg:     9142, Alpha: 1.00, Res:  32, f(x_p_d)=-141188416.0000 f(x_q)=-783765376.0000
+Itr:  55900 Kimg:     9155, Alpha: 1.00, Res:  32, f(x_p_d)=-141123024.0000 f(x_q)=-739015680.0000
+Itr:  56000 Kimg:     9168, Alpha: 1.00, Res:  32, f(x_p_d)=-152879920.0000 f(x_q)=-821780608.0000
+Calculate FID...
+Itr:  56000, FID:   507.802
+Itr:  56100 Kimg:     9181, Alpha: 1.00, Res:  32, f(x_p_d)=-188227840.0000 f(x_q)=-1012369024.0000
+Itr:  56200 Kimg:     9193, Alpha: 1.00, Res:  32, f(x_p_d)=-184671280.0000 f(x_q)=-929571648.0000
+Itr:  56300 Kimg:     9206, Alpha: 1.00, Res:  32, f(x_p_d)=-154584320.0000 f(x_q)=-868277504.0000
+Itr:  56400 Kimg:     9219, Alpha: 1.00, Res:  32, f(x_p_d)=-189327584.0000 f(x_q)=-1007888256.0000
+Itr:  56500 Kimg:     9232, Alpha: 1.00, Res:  32, f(x_p_d)=-197182032.0000 f(x_q)=-1009608512.0000
+Itr:  56600 Kimg:     9245, Alpha: 1.00, Res:  32, f(x_p_d)=-199286624.0000 f(x_q)=-1079005184.0000
+Itr:  56700 Kimg:     9257, Alpha: 1.00, Res:  32, f(x_p_d)=-191487808.0000 f(x_q)=-1058633600.0000
+Itr:  56800 Kimg:     9270, Alpha: 1.00, Res:  32, f(x_p_d)=-215998736.0000 f(x_q)=-1177964288.0000
+Itr:  56900 Kimg:     9283, Alpha: 1.00, Res:  32, f(x_p_d)=-243761696.0000 f(x_q)=-1283640576.0000
+Itr:  57000 Kimg:     9296, Alpha: 1.00, Res:  32, f(x_p_d)=-244580096.0000 f(x_q)=-1274390144.0000
+Itr:  57100 Kimg:     9309, Alpha: 1.00, Res:  32, f(x_p_d)=-290401152.0000 f(x_q)=-1493712384.0000
+Itr:  57200 Kimg:     9321, Alpha: 1.00, Res:  32, f(x_p_d)=-243513888.0000 f(x_q)=-1353560960.0000
+Itr:  57300 Kimg:     9334, Alpha: 1.00, Res:  32, f(x_p_d)=-307136832.0000 f(x_q)=-1630050048.0000

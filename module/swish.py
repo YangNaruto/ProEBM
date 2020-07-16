@@ -16,6 +16,6 @@ class Swish(torch.autograd.Function):
 		return grad_output * (sigmoid_i * (1 + i * (1 - sigmoid_i)))
 
 
-class Swish(nn.Module):
+class SwishModule(nn.Module):
 	def forward(self, input_tensor):
 		return Swish.apply(input_tensor)
