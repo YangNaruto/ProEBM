@@ -270,7 +270,7 @@ class ConvBlock(nn.Module):
 		self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
 		# self.skip = EqualConv2d(in_channel, out_channel, 1, stride=2, padding=0, bias=False)
 
-	def forward(self, input, res=False):
+	def forward(self, input, res=True):
 		out = self.conv1(input)
 		out = self.activation(out)
 
@@ -350,7 +350,7 @@ class BNConvBlock(nn.Module):
 		# self.skip = EqualConv2d(in_channel, out_channel, 1, stride=2, padding=0, bias=False)
 		self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
 
-	def forward(self, input, res=False):
+	def forward(self, input, res=True):
 		out = self.conv1(input)
 
 		out = self.activation(out)
@@ -429,7 +429,7 @@ class SNConvBlock(nn.Module):
 		# self.skip = nn.Sequential(spectral_norm(nn.Conv2d(in_channel, out_channel, 1)), nn.AvgPool2d(2))
 		# self.skip = lambda x: F.interpolate(x, scale_factor=0.5, mode='bilinear', align_corners=False)
 
-	def forward(self, input: torch.Tensor, res=False):
+	def forward(self, input: torch.Tensor, res=True):
 		out = self.conv1(input)
 		out = self.activation(out)
 
@@ -481,7 +481,7 @@ class Attention(nn.Module):
 
 
 class Discriminator(nn.Module):
-	def __init__(self, base_channel=32, fused=True, spectral=False, from_rgb_activate=False, add_attention=False, res=False, projection=False,
+	def __init__(self, base_channel=256, fused=True, spectral=False, from_rgb_activate=False, add_attention=False, res=True, projection=True,
 	             activation_fn='lrelu', bn=False, split=False):
 		super().__init__()
 		self.attention = nn.ModuleDict()
@@ -581,7 +581,7 @@ class Discriminator(nn.Module):
 		self.embedding = spectral_norm(nn.Embedding(10, base_channel * 4))
 		# self.linear = EqualLinear(base_channel*4, 1)
 		if projection:
-			self.linear = nn.Sequential(EqualLinear(base_channel*4, base_channel*16), self.activation, EqualLinear(base_channel*16, 1))
+			self.linear = nn.Sequential(EqualLinear(base_channel*4, base_channel*16), nn.LeakyReLU(0.2), EqualLinear(base_channel*16, 1))
 		else:
 			self.linear = nn.Sequential(EqualLinear(base_channel*4, 1))
 
