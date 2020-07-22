@@ -21,6 +21,20 @@ def init_conv(conv, glu=True):
 	if conv.bias is not None:
 		conv.bias.data.zero_()
 
+def get_activation(activation_fn):
+	if activation_fn == 'lrelu':
+		return nn.LeakyReLU(0.2)
+	elif activation_fn == 'gelu':
+		return nn.GELU()
+	elif activation_fn == 'swish':
+		return SwishModule()
+	elif activation_fn == 'elu':
+		return nn.ELU(alpha=1.0)
+	elif activation_fn == 'celu':
+		return nn.CELU(alpha=1.0)
+	elif activation_fn == 'relu':
+		return nn.ReLU()
+
 
 class EqualLR:
 	def __init__(self, name):
@@ -299,16 +313,6 @@ class BNConvBlock(nn.Module):
 			split=False
 	):
 		super().__init__()
-		if activation_fn=='lrelu':
-			self.activation = nn.LeakyReLU(0.2)
-		elif activation_fn=='gelu':
-			self.activation = nn.GELU()
-		elif activation_fn == 'swish':
-			self.activation = SwishModule()
-		elif activation_fn == 'elu':
-			self.activation = nn.ELU(alpha=1.0)
-		elif activation_fn == 'celu':
-			self.activation = nn.CELU(alpha=1.0)
 
 		pad1 = padding
 		pad2 = padding
@@ -481,8 +485,8 @@ class Attention(nn.Module):
 
 
 class Discriminator(nn.Module):
-	def __init__(self, base_channel=256, fused=True, spectral=False, from_rgb_activate=False, add_attention=False, res=True, projection=True,
-	             activation_fn='lrelu', bn=False, split=False):
+	def __init__(self, base_channel=256, fused=False, spectral=False, from_rgb_activate=False, add_attention=False, res=True, projection=True,
+	             activation_fn='lrelu', bn=False, split=False, num_classes=10):
 		super().__init__()
 		self.attention = nn.ModuleDict()
 
@@ -513,10 +517,10 @@ class Discriminator(nn.Module):
 					'5': SNConvBlock(base_channel * 2, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 16
 					'6': SNConvBlock(base_channel * 2, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 8
 					'7': SNConvBlock(base_channel * 4, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 4
-					'8': SNConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0)
+					'8': SNConvBlock(base_channel * 4, base_channel * 4, 3, 1, 4, 0)
 				}
 			)
-			self.final_conv = SNConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0)
+			self.final_conv = SNConvBlock(base_channel * 4 * 2, base_channel * 4, 3, 1, 4, 0)
 		elif bn:
 			self.progression = nn.ModuleDict(
 				{
@@ -529,10 +533,10 @@ class Discriminator(nn.Module):
 					'5': BNConvBlock(base_channel * 2, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn, split=split),  # 16
 					'6': BNConvBlock(base_channel * 2, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn, split=split),  # 8
 					'7': BNConvBlock(base_channel * 4, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn, split=split),  # 4
-					'8': BNConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn, split=split)
+					'8': BNConvBlock(base_channel * 4, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn, split=split)
 				}
 			)
-			self.final_conv = SNConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
+			self.final_conv = SNConvBlock(base_channel * 4, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
 		else:
 			self.progression = nn.ModuleDict(
 				{
@@ -545,10 +549,12 @@ class Discriminator(nn.Module):
 					'5': ConvBlock(base_channel * 2, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 16
 					'6': ConvBlock(base_channel * 2, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 8
 					'7': ConvBlock(base_channel * 4, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 4
-					'8': ConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
+					'8': ConvBlock(base_channel * 4, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
 				}
 			)
-			self.final_conv = ConvBlock(base_channel * 4 + 1, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
+			self.final_conv = ConvBlock(base_channel * 4, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
+
+		self.ins_norm = nn.InstanceNorm2d(base_channel * 4, affine=False)
 
 		def from_rgb(out_channel):
 			if from_rgb_activate:
@@ -578,7 +584,7 @@ class Discriminator(nn.Module):
 		self.alpha = nn.ParameterList([nn.Parameter(torch.zeros(1), requires_grad=True) for i in range(10)])
 		self.n_layer = len(self.progression)
 
-		self.embedding = spectral_norm(nn.Embedding(10, base_channel * 4))
+		self.embedding = spectral_norm(nn.Embedding(num_classes, base_channel * 4))
 		# self.linear = EqualLinear(base_channel*4, 1)
 		if projection:
 			self.linear = nn.Sequential(EqualLinear(base_channel*4, base_channel*16), nn.LeakyReLU(0.2), EqualLinear(base_channel*16, 1))
@@ -610,10 +616,12 @@ class Discriminator(nn.Module):
 					out = (1 - alpha) * skip_rgb + alpha * out
 
 		assert out is not None
-		out_std = torch.sqrt(out.var(0, unbiased=False) + 1e-8)
-		mean_std = out_std.mean()
-		mean_std = mean_std.expand(out.size(0), 1, 4, 4)
-		out = torch.cat([out, mean_std], 1)
+		# out_std = torch.sqrt(out.var(0, unbiased=False) + 1e-8)
+		# mean_std = out_std.mean()
+		# mean_std = mean_std.expand(out.size(0), 1, 4, 4)
+		# out = torch.cat([out, mean_std], 1)
+		out_norm = self.ins_norm(out)
+		out  = torch.cat([out, out_norm], 1)
 		h = self.final_conv(out, res=False)
 		h = h.squeeze(2).squeeze(2)
 		out = self.linear(h)

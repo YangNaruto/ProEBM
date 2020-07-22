@@ -470,12 +470,7 @@ if __name__ == "__main__":
 		if args.sched:
 			args.lr = {8: 0.0010, 16: 0.0012, 32: 0.0015, 64: 0.0015, 128: 0.0015}
 			args.batch = {8: 512, 16: 256, 32: 128, 64: 64, 128: 32, 256: 32}
-			# args.phases = {8:600_000, 16:2_000_000, 32: 4_000_000, 64: 10_000_000}
 
-		# for key, value in args.batch.items():
-		# 	args.batch.update({key: int(value * 64 / args.base_channel)})
-		# args.batch = {4: 512, 8: 512, 16: 256, 32: 128, 64: 64, 128: 32, 256: 32}
-		# args.lr = {key : value/4 for key, value in lr.items()}
 		else:
 			args.lr = {}
 			args.batch = {}
