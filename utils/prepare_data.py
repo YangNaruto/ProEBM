@@ -71,6 +71,7 @@ if __name__ == '__main__':
 
     imgset = datasets.ImageFolder(args.path)
 
-    with lmdb.open("_".join([args.out, str(args.data_ratio)]), map_size=1024 ** 4, readahead=False) as env:
+    # with lmdb.open("_".join([args.out, str(args.data_ratio)]), map_size=1024 ** 4, readahead=False) as env:
+    with lmdb.open(args.out, map_size=1024 ** 4, readahead=False) as env:
         with env.begin(write=True) as txn:
             prepare(txn, imgset, args.n_worker, sizes=(8, 16, 32, 64, 128, 256), data_ratio=args.data_ratio)

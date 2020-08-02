@@ -12,7 +12,6 @@ import math
 import numpy as np
 import sys
 import copy
-
 sys.path.append("./utils/score")
 from scipy.stats import truncnorm
 from module import networks
@@ -21,14 +20,12 @@ from utils.logger import Logger
 from utils.submit import _get_next_run_id_local, _create_run_dir_local, _copy_dir, _save_args
 from utils.score import fid
 from utils.util import EMA
-
 seed = 1
 t.manual_seed(seed)
 if t.cuda.is_available():
 	t.cuda.manual_seed_all(seed)
 
 sqrt = lambda x: int(t.sqrt(t.Tensor([x])))
-
 
 # ------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------
@@ -37,20 +34,23 @@ class ProgressiveEBM(object):
 		super().__init__()
 		self.default_lr = args.lr_default
 		self.device = t.device(args.device if torch.cuda.is_available() else 'cpu')
+
+		num_classes = 10 if args.dataset == 'cifar10' else 1000
+
 		self.ebm = networks.Discriminator(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
 		                                  projection=args.projection, activation_fn=args.activation_fn,
 		                                  from_rgb_activate=args.from_rgb_activate, bn=args.bn, split=args.split_bn,
-		                                  add_attention=args.attention).to(self.device)
+		                                  add_attention=args.attention, num_classes=num_classes).to(self.device)
 
 		# create ema model
 		self.ebm_ema = networks.Discriminator(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
-		                                      projection=args.projection, activation_fn=args.activation_fn,
-		                                      from_rgb_activate=args.from_rgb_activate, bn=args.bn, split=args.split_bn,
-		                                      add_attention=args.attention).to(self.device)
+		                                  projection=args.projection, activation_fn=args.activation_fn,
+		                                  from_rgb_activate=args.from_rgb_activate, bn=args.bn, split=args.split_bn,
+		                                      add_attention=args.attention, num_classes=num_classes).to(self.device)
 		self.ebm_ema.train(False)
 		self.ema_manager = EMA(self.ebm, self.ebm_ema)
 		# self._momentum_update_model(self.ebm, self.ebm_ema, momentum=0.0)
-
+		# print(self.ebm)
 		self.args = args
 		self.truncation = args.truncation
 		self.min_step, self.max_step = int(math.log2(args.init_size)) - 2, int(math.log2(args.max_size)) - 2
@@ -58,19 +58,28 @@ class ProgressiveEBM(object):
 		self.noise_ratio = args.noise_ratio
 		self.resolution = [2 ** x for x in range(2, 10)]
 		self.progressive = args.pro
-		self.optimizer = torch.optim.Adam(self.ebm.parameters(), lr=self.default_lr, betas=(0.9, 0.999), amsgrad=args.amsgrad)
+		self.optimizer = torch.optim.Adam(self.ebm.parameters(), lr=self.default_lr, betas=(0.0, 0.99), amsgrad=args.amsgrad)
 
-	def requires_grad(self, flag=True):
-		for p in self.ebm.parameters():
-			p.requires_grad = flag
 
-	# @torch.no_grad()
-	def _momentum_update_model(self, model, model_ema, momentum=0.99):
-		"""
-		Momentum update of the key encoder
-		"""
-		for param, param_ema in zip(model.parameters(), model_ema.parameters()):
-			param_ema.data = param_ema.data * momentum + param.data * (1. - momentum)
+	def requires_grad(self, step, alpha=1, flag=True):
+		if alpha > 0.5:
+			for p in self.ebm.parameters():
+				p.requires_grad = True
+		else:
+			for p in self.ebm.parameters():
+				p.requires_grad = False
+
+			for p in self.ebm.progression[str(8-step)].parameters():
+				p.requires_grad = True
+
+			for p in self.ebm.from_rgb[8-step].parameters():
+				p.requires_grad = True
+
+			# for p in self.ebm.linear.parameters():
+			# 	p.requires_grad = True
+		trainable_parameters = filter(lambda p: p.requires_grad, self.ebm.parameters())
+
+		self.optimizer = torch.optim.Adam(trainable_parameters, lr=self.default_lr, betas=(0.0, 0.99), amsgrad=args.amsgrad)
 
 	@staticmethod
 	def slerp(val, low, high):
@@ -81,16 +90,9 @@ class ProgressiveEBM(object):
 		res = (torch.sin((1.0 - val) * omega) / so).unsqueeze(1) * low + (torch.sin(val * omega) / so).unsqueeze(1) * high
 		return res
 
-	def metropolis_hastings(self, x, x_prev, step, alpha):
-		energy = self.ebm(x, step=step, alpha=alpha)
-		energy_prev = self.ebm(x_prev, step=step, alpha=alpha)
-		acceptance = (torch.exp(-energy) / torch.exp(-energy_prev) - energy.uniform_(0., 1.)) >= 0
-		x = torch.where(acceptance.view(-1, 1, 1, 1), x, x_prev)
-		return x.data
-
 	@staticmethod
 	def add_noise(x, sigma=1e-2):
-		return x + sigma * t.randn_like(x)
+		return  x + sigma * t.randn_like(x)
 
 	def sample_data(self, dataset, batch_size, image_size=4):
 		dataset.resolution = image_size
@@ -110,6 +112,12 @@ class ProgressiveEBM(object):
 		lr = float(np.clip(0.5 * cos_out * lr, min_lr, 100))
 		return lr
 
+	def polynomial(self, t, T, base_lr, end_lr=0.0001, power=1.):
+		lr = (base_lr - end_lr) * ((1 - t / T) ** power) + end_lr
+
+		# lr = a * (b + t) ** power
+		return lr
+
 	def adjust_lr(self, lr):
 		for group in self.optimizer.param_groups:
 			mult = group.get('mult', 1)
@@ -126,21 +134,67 @@ class ProgressiveEBM(object):
 				step_list = range(self.min_step, step + 1)
 				self.noise_ratio = 0.
 			else:
-				step_list = range(step - 1, step + 1) if (alpha < 1 or self.noise_ratio < 1 and soft) else range(step, step + 1)
+				step_list = range(step - 1, step + 1) if ((alpha < 0.5 or self.noise_ratio < 1) and soft) else range(step, step+1)
 
 		# initial = self.args.initial if self.args.noise_ratio == 1.0 else 'gaussian'
 		step_list = list(step_list)
-		x_k.requires_grad_(True)
+
 		beta = 0.0 if self.args.initial == 'gaussian' else 0.0
 		for index, s in enumerate(step_list):
 			if index != 0:
-				# x_k = self.ebm.norm[s](x_k)
-				x_k = F.interpolate(x_k, scale_factor=2, mode='nearest')
+				x_k = F.interpolate(x_k.clone().detach(), scale_factor=2, mode='nearest')
 				x_k = (1 - self.noise_ratio * alphas[s]) * x_k + \
 				      self.noise_ratio * alphas[s] * self.sample_p_0(x_k.shape[0], x_k.shape[-1], n_ch=3, initial=self.args.initial)
 
 				x_k = torch.clamp(x_k, -self.val_clip, self.val_clip)
+			x_k.requires_grad_(True)
+			# langevin_steps = int(sampler_step / (len(step_list) - index))
+			langevin_steps = sampler_step
+			e = 0.1
+			images = []
+			for k in range(langevin_steps):
 
+				if self.args.ema and sampling:
+					loss = self.ebm_ema(x_k, step=s, alpha=alphas[s], label=label).sum() + beta * (-x_k**2 / (2*e**2)).sum()
+				else:
+					loss = self.ebm(x_k, step=s, alpha=alphas[s], label=label).sum() + beta * (-x_k**2 / (2*e**2)).sum()
+
+				f_prime = t.autograd.grad(loss, [x_k], retain_graph=True)[0]
+				# lr = self.cyclic(langevin_steps, k, M=1, lr=self.args.langevin_lr, min_lr=self.args.langevin_lr) if self.args.cyclic else self.args.langevin_lr
+				# sigma = self.cyclic(langevin_steps, k, M=1, lr=2e-1, min_lr=1e-2) if self.args.cyclic else 1e-2
+
+				sigma = self.polynomial(k, langevin_steps, base_lr=1.5e-2, end_lr=5e-3, power=1) if self.args.cyclic else 1e-2
+				lr = self.polynomial(k, langevin_steps, base_lr=self.args.langevin_lr, end_lr=self.args.langevin_lr, power=1) if self.args.cyclic else self.args.langevin_lr
+				# sigma = 2e-1 * (1 + 10*k)**(-0.55) if self.args.cyclic else 1e-2
+				# lr = self.args.langevin_lr * (1 + 10*k)**(-0.55) if self.args.cyclic else self.args.langevin_lr
+
+				x_k.data += lr * f_prime + sigma * t.randn_like(x_k)
+				# x_k.data.clamp_(-self.val_clip, self.val_clip)
+
+				images.append(x_k.clone().detach())
+			x_k.data.clamp_(-self.val_clip, self.val_clip)
+
+		return x_k.clone().detach()
+		# return images
+
+	def super_langevin_sampler(self, x_k, sampler_step, step, alpha, from_beginning=False, label=None, soft=False, sampling=False):
+		alphas = [1 for _ in range(step)]
+		alpha = 1.0
+		alphas.append(alpha)
+
+		# initial = self.args.initial if self.args.noise_ratio == 1.0 else 'gaussian'
+		step_list = [step]
+		x_k.requires_grad_(True)
+		x_k = F.interpolate(x_k, scale_factor=2, mode='bilinear')
+		x_k = (1 - self.noise_ratio * alphas[-1]) * x_k + \
+		      self.noise_ratio * alphas[-1] * self.sample_p_0(x_k.shape[0], x_k.shape[-1], n_ch=3, initial='gaussian')
+
+		x_k = torch.clamp(x_k, -self.val_clip, self.val_clip)
+
+		beta = 0.0 if self.args.initial == 'gaussian' else 0.0
+
+		for index, s in enumerate(step_list):
+			images = []
 			# langevin_steps = int(sampler_step / len(step_list))
 			# langevin_steps = int(sampler_step / (len(step_list) - index))
 			langevin_steps = sampler_step
@@ -148,24 +202,32 @@ class ProgressiveEBM(object):
 			for k in range(langevin_steps):
 
 				if self.args.ema and sampling:
-					loss = self.ebm_ema(x_k, step=s, alpha=alphas[s], label=label).sum() + beta * (-x_k ** 2 / (2 * e ** 2)).sum()
+					loss = self.ebm_ema(x_k, step=s, alpha=alphas[s], label=label).sum() + beta * (-x_k**2 / (2*e**2)).sum()
 				else:
-					loss = self.ebm(x_k, step=s, alpha=alphas[s], label=label).sum() + beta * (-x_k ** 2 / (2 * e ** 2)).sum()
+					loss = self.ebm(x_k, step=s, alpha=alphas[s], label=label).sum() + beta * (-x_k**2 / (2*e**2)).sum()
 
 				f_prime = t.autograd.grad(loss, [x_k], retain_graph=True)[0]
-				lr = self.cyclic(langevin_steps, k, M=1, lr=self.args.langevin_lr, min_lr=2.0) if self.args.cyclic else self.args.langevin_lr
-				sigma = self.cyclic(langevin_steps, k, M=1, lr=1e-1, min_lr=5e-3) if self.args.cyclic else 1e-2
+				lr = self.cyclic(langevin_steps, k, M=1, lr=self.args.langevin_lr, min_lr=self.args.langevin_lr) if self.args.cyclic else self.args.langevin_lr
+				# sigma = self.cyclic(langevin_steps, k, M=1, lr=1e-1, min_lr=1e-3) if self.args.cyclic else 1e-2
 
+				sigma = self.polynomial(k, langevin_steps, base_lr=2e-1, end_lr=1e-2, power=2) if self.args.cyclic else 1e-2
+				# lr = self.polynomial(k, langevin_steps, base_lr=self.args.langevin_lr, end_lr=1e-1, power=1) if self.args.cyclic else self.args.langevin_lr
+				# sigma = 2e-1 * (1 + 10*k)**(-0.55) if self.args.cyclic else 1e-2
+				# lr = self.args.langevin_lr * (1 + 10*k)**(-0.55) if self.args.cyclic else self.args.langevin_lr
+				# lr =
+				# sigma = sqrt(2*lr)
 				x_k.data += lr * f_prime + sigma * t.randn_like(x_k)
+				images.append(x_k.clone().detach())
 			x_k.data.clamp_(-self.val_clip, self.val_clip)
 
-		return x_k.clone().detach()
+		return images
+
 
 	def sample_p_0(self, bs, im_sz, n_ch=3, initial='gaussian'):
 		if initial == 'gaussian':
 			x_k = torch.from_numpy(self.truncated_normal(size=(bs, n_ch, im_sz, im_sz), threshold=self.truncation).astype(np.float32)).to(self.device)
 		else:
-			x_k = self.truncation * (-2. * torch.rand(bs, n_ch, im_sz, im_sz) + 1.).to(self.device)
+			x_k = self.truncation*(-2. * torch.rand(bs, n_ch, im_sz, im_sz) + 1.).to(self.device)
 
 		return x_k
 
@@ -189,6 +251,7 @@ class ProgressiveEBM(object):
 		used_sample = ckpt['used_sample']
 		return step, alpha, used_sample
 
+
 	# def evaluate(self, ckpt_name, sampler_step, fig_name='samples'):
 	# 	with torch.no_grad():
 	# 		step, alpha, _= self.load_ckpt(ckpt_name)
@@ -198,6 +261,67 @@ class ProgressiveEBM(object):
 	# 			os.makedirs(sample_path)
 	# 		self.plot(os.path.join(sample_path, f'{fig_name}_{sampler_step}.png'), samples)
 	# 		return
+	#
+	@staticmethod
+	def test_loader(dataset_name='cifar10', batch_size=64):
+		transform = tr.Compose(
+			[tr.ToTensor(),
+			 tr.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+		batch_size = 64
+		if dataset_name == 'cifar10':
+			dataset = tv.datasets.CIFAR10('./data', train=False, transform=transform, target_transform=None, download=True)
+			data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
+			dataiter = iter(data_loader)
+			images, labels = next(dataiter)
+		return images
+
+	def denoise(self, dataset_name='cifar10', batch_size=64):
+
+		images = self.test_loader(dataset_name=dataset_name, batch_size=64)
+		images = images.to(self.device)
+		noisy_images = (1.0*torch.randn_like(images)).clamp(-1, 1)
+		noisy_images = self.sample_p_0(images.shape[0], images.shape[-1], n_ch=3, initial='uniform')
+		clean_images = self.langevin_sampler(x_k=noisy_images.clone().detach(), sampler_step=100, step=int(math.log2(self.args.max_size)) - 2, alpha=1, label=None, soft=True,
+		                                             sampling=True)
+		row = int(sqrt(batch_size))
+		if not os.path.exists('noise'):
+			os.mkdir('noise')
+		else:
+			shutil.rmtree('noise')
+			os.mkdir('noise')
+		tv.utils.save_image(images[:row ** 2], 'noise/raw_denoise.png', padding=1, normalize=True, range=(-1., 1.), nrow=row)
+		tv.utils.save_image(noisy_images[:row ** 2], 'noise/noisy.png', padding=1, normalize=True, range=(-1., 1.), nrow=row)
+		print(len(clean_images))
+		for i in range(len(clean_images)):
+			tv.utils.save_image(clean_images[i][:row ** 2], 'noise/clean_{}.png'.format(i), padding=1, normalize=True, range=(-1., 1.), nrow=row)
+
+
+	def super_resolution(self, dataset_name='cifar10', batch_size=64):
+		images = self.test_loader(dataset_name=dataset_name, batch_size=64)
+
+		if dataset_name == 'cifar10':
+			scale_factor = 0.5
+
+		# low_images = tr.ToPILImage(images)
+		low_images = F.interpolate(images, scale_factor=scale_factor, mode='bicubic').to(self.device)
+
+		high = self.super_langevin_sampler(x_k=low_images.clone().detach(), sampler_step=25, step=int(math.log2(self.args.max_size)) - 2, alpha=1, label=None, soft=True,
+		                                             sampling=True, from_beginning=False)
+		row = int(sqrt(batch_size))
+		if not os.path.exists('super'):
+			os.mkdir('super')
+		else:
+			shutil.rmtree('super')
+			os.mkdir('super')
+		tv.utils.save_image(images[:row ** 2], 'super/raw_super.png', padding=1, normalize=True, range=(-1., 1.), nrow=row)
+		tv.utils.save_image(low_images[:row ** 2], 'super/low.png', padding=1, normalize=True, range=(-1., 1.), nrow=row)
+		for i in range(len(high)):
+
+			tv.utils.save_image(high[i][:row ** 2], 'super/high_{}.png'.format(i), padding=1, normalize=True, range=(-1., 1.), nrow=row)
+
+	def inpainting(self):
+		pass
 
 	@staticmethod
 	def normalize_tensor(tensor):
@@ -215,7 +339,7 @@ class ProgressiveEBM(object):
 			for _ in range(30_000 // batch_size):
 				x_k = self.sample_p_0(bs=batch_size, im_sz=im_size, initial=args.initial)
 				if self.args.conditional:
-					label = torch.randint(0, 10, size=(batch_size,), device=self.device)
+					label = torch.randint(0, 10, size=(batch_size, ), device=self.device)
 				sample = self.langevin_sampler(x_k=x_k, sampler_step=sampler_step, step=step, alpha=alpha, label=label, soft=soft, sampling=True)
 				samples.append(self.normalize_tensor(sample).cpu())
 		samples = torch.cat(samples, dim=0)
@@ -298,7 +422,7 @@ class ProgressiveEBM(object):
 			total_used_samples += real_image.shape[0]
 			b_size = real_image.size(0)
 			real_image, real_label = real_image.to(self.device), real_label.to(self.device)
-			sigma = self.cyclic(T, i, base_sigma, M=1, min_lr=0.01) if args.cyclic else base_sigma
+			sigma = base_sigma
 
 			x_p_d = self.sample_p_d(real_image, sigma)
 
@@ -316,7 +440,7 @@ class ProgressiveEBM(object):
 				if args.from_beginning:
 					im_size = self.resolution[self.min_step]
 				else:
-					im_size = self.resolution[step - 1] if alpha < 1 or self.noise_ratio < 1 and args.soft else self.resolution[step]
+					im_size = self.resolution[step - 1] if ((alpha < 0.5 or self.noise_ratio < 1) and args.soft) else self.resolution[step]
 
 			self.ebm.eval()
 			with torch.enable_grad():
@@ -324,26 +448,32 @@ class ProgressiveEBM(object):
 				x_k = self.sample_p_0(bs=b_size, im_sz=im_size, initial=args.initial)
 				x_k_cp = x_k.clone().detach()
 				x_q = self.langevin_sampler(x_k=x_k, sampler_step=args.langevin_step, step=step, alpha=alpha, from_beginning=args.from_beginning, soft=args.soft)
-				if args.ema and i % 100 == 0 and i > args.ema_start:
+				if args.ema and step == max_step and alpha == 1:
 					x_q_ema = self.langevin_sampler(x_k=x_k_cp, sampler_step=args.langevin_step, step=step, alpha=alpha, from_beginning=args.from_beginning, soft=args.soft,
-					                                sampling=True)
+					                            sampling=True)
 
 			self.ebm.train()
+			self.requires_grad(step=step, alpha=alpha)
+			self.adjust_lr(args.lr.get(resolution, self.default_lr))
+
 			x = torch.cat((x_p_d, x_q), dim=0)
 			label = torch.cat((real_label, fake_label), dim=0) if args.conditional else None
 			energy = self.ebm(x, step=step, alpha=alpha, label=label)
 
 			pos_energy, neg_energy = [e for e in torch.split(energy, [x_k.shape[0], x_q.shape[0]])]
 
-			l2_regularizer = pos_energy ** 2 - neg_energy ** 2
-			L = (pos_energy - neg_energy + args.l2_coefficient * l2_regularizer).mean()
+			l2_regularizer = pos_energy**2 - neg_energy**2
+			L = (pos_energy - neg_energy + args.l2_coefficient*l2_regularizer).mean()
+
 			self.optimizer.zero_grad()
+
 			(-L).backward()
 			self.optimizer.step()
 			#
+
 			if args.ema:
-				# if step == max_step and alpha == 1:
-				if i > args.ema_start:
+				if step == max_step and alpha == 1:
+				# if i > args.ema_start:
 					self.ema_manager.update(decay=args.momentum)
 				else:
 					self.ema_manager.update(decay=0.)
@@ -351,16 +481,18 @@ class ProgressiveEBM(object):
 			if i % 100 == 0:
 				print('Itr: {:>6d}, Kimg: {:>8d}, Alpha: {:>3.2f}, Res: {:>3d}, f(x_p_d)={:8.4f}, f(x_q)={:>8.4f}'.
 				      format(i, total_used_samples // 1000, alpha, resolution, pos_energy.mean(), neg_energy.mean()))
-
+				if abs(L.data) > 1000:
+					break
 				self.plot(os.path.join(save_path, '{:>06d}_q.png'.format(i)), x_q)
-				if args.ema and i > args.ema_start:
+				if args.ema and step == max_step and alpha == 1:
 					self.plot(os.path.join(save_path, '{:>06d}_q_ema.png'.format(i)), x_q_ema)
 
-				if i % interval == 0 and i != 0 and args.dataset != 'metfaces' and alpha == 1:
-					print('Calculating FID score ...')
+				if i % interval == 0 and i != 0:
+					if args.dataset in ['cifar10', 'imagenet', 'celeba'] and alpha==1 and args.max_size < 128:
+						print('Calculating FID score ...')
 
-					fid_score = self.calculate_fid(stats_path=args.stats_path, im_size=im_size, sampler_step=args.langevin_step, step=step, alpha=alpha, soft=args.soft)
-					print(f"Itr: {i:>6d}, FID:{fid_score:>10.3f}")
+						fid_score = self.calculate_fid(stats_path=args.stats_path, im_size=im_size, sampler_step=args.langevin_step, step=step, alpha=alpha, soft=args.soft)
+						print(f"Itr: {i:>6d}, FID:{fid_score:>10.3f}")
 					torch.save(
 						{
 							'used_sample': used_sample,
@@ -368,7 +500,7 @@ class ProgressiveEBM(object):
 							'step': step,
 							'ebm': self.ebm.state_dict(),
 							'optimizer': self.optimizer.state_dict(),
-							'ebm_ema': self.ebm_ema.state_dict(),
+							'ebm_ema':self.ebm_ema.state_dict(),
 						},
 						f'{save_path}/train_step-{i}.model',
 					)
@@ -385,6 +517,7 @@ if __name__ == "__main__":
 	parser.add_argument('--phase', type=int, default=600_000, help='number of samples used for each training phases')
 	parser.add_argument('--device', type=str, default='0')
 
+
 	parser.add_argument('--mode', type=str, default='train', help="train/eval")
 	parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
 	parser.add_argument('--sched', action='store_true', help='use lr scheduling')
@@ -397,7 +530,7 @@ if __name__ == "__main__":
 	parser.add_argument('--res', action='store_true', default=False)
 	parser.add_argument('--projection', action='store_true', default=False)
 	parser.add_argument('--from_beginning', action='store_true', default=False)
-	parser.add_argument('--soft', action='store_true', default=True, help="if add soft connection in transition stage")
+	parser.add_argument('--soft', action='store_true', default=False, help="if add soft connection in transition stage")
 	parser.add_argument('--split_bn', action='store_true', default=False, help="if split bn")
 	parser.add_argument('--ema', action='store_true', default=False)
 	parser.add_argument('--initial', default='uniform', type=str, help='initial distribution')
@@ -406,7 +539,7 @@ if __name__ == "__main__":
 	parser.add_argument('--ema_start', default=0, type=int, help='ema start')
 	parser.add_argument('--langevin_lr', default=2., type=float, help='langevin learning rate')
 	parser.add_argument('--l2_coefficient', default=0.0, type=float, help='l2 regularization coefficient')
-	parser.add_argument('--iterations', default=400_000, type=int, help='l2 regularization coefficient')
+	parser.add_argument('--iterations', default=1_000_000, type=int, help='l2 regularization coefficient')
 	parser.add_argument('--pro', action='store_true', default=False, help='if progressivly fading')
 	parser.add_argument('--spectral', action='store_true', default=False, help="add spectral normalization")
 	parser.add_argument('--bn', action='store_true', default=False, help="add split batch normalization")
@@ -441,12 +574,27 @@ if __name__ == "__main__":
 	if not os.path.exists(save_path):
 		os.makedirs(save_path)
 
+	if args.sched:
+		args.lr = {8: 0.0005, 16: 0.0008, 32: 0.0010, 64: 0.0010, 128: 0.0013}
+		args.batch = {8: 256, 16: 128, 32: 64, 64: 64, 128: 32, 256: 32}
+		# args.phases = {8:600_000, 16:2_000_000, 32: 4_000_000, 64: 10_000_000}
+
+		# for key, value in args.batch.items():
+		# 	args.batch.update({key: int(value * 64 / args.base_channel)})
+		# args.batch = {4: 512, 8: 512, 16: 256, 32: 128, 64: 64, 128: 32, 256: 32}
+		args.lr = {key: value + 5e-4 for key, value in args.lr.items()}
+	else:
+		args.lr = {}
+		args.batch = {}
+	args.batch_default = 64
+	args.lr_default = 1e-3
+
 	if args.mode == "train":
 		dir_name = f'step{args.langevin_step}-trunc{args.truncation}-res{args.max_size}-lr{args.langevin_lr}-{args.initial}-ch{args.base_channel}-{args.activation_fn}'
 		if args.ema:
 			dir_name += f'-ema{args.momentum}'
 		run_dir = _create_run_dir_local(save_path, dir_name)
-		_copy_dir(['module', 'utils', 'train_v0.py'], run_dir)
+		_copy_dir(['module', 'utils', 'train_v1.py'], run_dir)
 		sys.stdout = Logger(os.path.join(run_dir, 'log.txt'))
 
 		args.run_dir = run_dir
@@ -462,24 +610,16 @@ if __name__ == "__main__":
 		dataset_path = os.path.join(args.data_root, args.dataset)
 		dataset = dataset_util.MultiResolutionDataset(dataset_path, transform)
 
-		if args.sched:
-			args.lr = {8: 0.001, 16: 0.001, 32: 0.001, 64: 0.001, 128: 0.0015}
-			args.batch = {8: 512, 16: 256, 32: 128, 64: 64, 128: 64, 256: 32}
-		# args.phases = {8:600_000, 16:2_000_000, 32: 4_000_000, 64: 10_000_000}
 
-		# for key, value in args.batch.items():
-		# 	args.batch.update({key: int(value * 64 / args.base_channel)})
-		# args.batch = {4: 512, 8: 512, 16: 256, 32: 128, 64: 64, 128: 32, 256: 32}
-		# args.lr = {key : value/4 for key, value in lr.items()}
-		else:
-			args.lr = {}
-			args.batch = {}
-		args.batch_default = 64
-		args.lr_default = 5e-4
 		print(args)
 		trainer = ProgressiveEBM(args)
+
+
 		trainer.train(args, dataset, run_dir, load=args.load, ckpt_name=args.ckpt)
 
 	elif args.mode == "eval" and args.ckpt is not None:
 		trainer = ProgressiveEBM(args)
-		trainer.evaluate(ckpt_name=args.ckpt, sampler_step=args.eval_step)
+		trainer.load_ckpt(ckpt_name=args.ckpt)
+
+		trainer.denoise(dataset_name='cifar10', batch_size=64)
+		# trainer.super_resolution(dataset_name='cifar10', batch_size=64)
