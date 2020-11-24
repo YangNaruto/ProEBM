@@ -264,13 +264,13 @@ class ConvBlock(nn.Module):
 					EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
 					nn.AvgPool2d(2),
 				)
-
+			self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
 		else:
 			self.conv2 = nn.Sequential(
 				EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
 			)
+			self.skip = EqualConv2d(in_channel, out_channel, 1)
 
-		self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
 		# self.skip = EqualConv2d(in_channel, out_channel, 1, stride=2, padding=0, bias=False)
 
 	def forward(self, input, res=True):
@@ -320,14 +320,14 @@ class BNConvBlock(nn.Module):
 		if downsample:
 			if fused:
 				self.conv2 = nn.Sequential(
-					# Blur(out_channel),
+					Blur(out_channel),
 					FusedDownsample(out_channel, out_channel, kernel2, padding=pad2),
 
 				)
 
 			else:
 				self.conv2 = nn.Sequential(
-					# Blur(out_channel),
+					Blur(out_channel),
 					EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
 					nn.AvgPool2d(2),
 
@@ -389,7 +389,6 @@ class SNConvBlock(nn.Module):
 
 		self.conv1 = nn.Sequential(
 			spectral_norm(nn.Conv2d(in_channel, out_channel, kernel1, padding=pad1)),
-			self.activation,
 		)
 
 		if downsample:
@@ -405,16 +404,22 @@ class SNConvBlock(nn.Module):
 					spectral_norm(nn.Conv2d(out_channel, out_channel, kernel2, padding=pad2)),
 					nn.AvgPool2d(2),
 				)
-
+			self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
 		else:
 			self.conv2 = nn.Sequential(
 				spectral_norm(nn.Conv2d(out_channel, out_channel, kernel2, padding=pad2)),
+				# nn.AvgPool2d(2)
 			)
-		self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
+
+			# self.conv2 = nn.AvgPool2d(4)
+			# self.conv2 = nn.MaxPool2d(4)
+			self.skip = EqualConv2d(in_channel, out_channel, kernel2, padding=pad2)
+
 		# self.gain = nn.Embedding(n_classes, in_channel)
 		# self.bias = nn.Embedding(n_classes, in_channel)
 		# self.skip = nn.Sequential(spectral_norm(nn.Conv2d(in_channel, out_channel, 1)), nn.AvgPool2d(2))
 		# self.skip = lambda x: F.interpolate(x, scale_factor=0.5, mode='bilinear', align_corners=False)
+		# self.lrelu = nn.LeakyReLU(0.2)
 
 	def forward(self, input: torch.Tensor, res=False, label=None):
 		out = self.conv1(input)
@@ -486,15 +491,16 @@ class Discriminator(nn.Module):
 		if spectral:
 			self.progression = nn.ModuleDict(
 				{
-					'0': SNConvBlock(base_channel // 16, base_channel // 8, kernel_size, 1, downsample=True, fused=fused, activation_fn=activation_fn, n_classes=num_classes),
+					'0': SNConvBlock(base_channel // 8, base_channel // 4, kernel_size, 1, downsample=True, fused=fused, activation_fn=activation_fn, n_classes=num_classes),
 					# 512
-					'1': SNConvBlock(base_channel // 8, base_channel // 4, kernel_size, 1, downsample=True, fused=fused, activation_fn=activation_fn, n_classes=num_classes),  # 256
+					'1': SNConvBlock(base_channel // 4, base_channel // 2, kernel_size, 1, downsample=True, fused=fused, activation_fn=activation_fn, n_classes=num_classes),  # 256
 
-					'2': SNConvBlock(base_channel // 4, base_channel // 2, kernel_size, padding, downsample=True, fused=fused, activation_fn=activation_fn,
+					'2': SNConvBlock(base_channel // 2, base_channel, kernel_size, padding, downsample=True, fused=fused, activation_fn=activation_fn,
 					                 n_classes=num_classes),  # 128
-					'3': SNConvBlock(base_channel // 2, base_channel, kernel_size, padding, downsample=True, fused=fused, activation_fn=activation_fn, n_classes=num_classes),  # 64
-					'4': SNConvBlock(base_channel, base_channel * 2, kernel_size, padding, downsample=True, activation_fn=activation_fn, n_classes=num_classes),  # 32
-					'5': SNConvBlock(base_channel * 2, base_channel * 4, kernel_size, padding, downsample=True, activation_fn=activation_fn, n_classes=num_classes),  # 16
+					'3': SNConvBlock(base_channel, base_channel * 2, kernel_size, padding, downsample=True, fused=fused, activation_fn=activation_fn, n_classes=num_classes),
+					# 64
+					'4': SNConvBlock(base_channel * 2, base_channel * 4, kernel_size, padding, downsample=True, activation_fn=activation_fn, n_classes=num_classes),  # 32
+					'5': SNConvBlock(base_channel * 4, base_channel * 4, kernel_size, padding, downsample=True, activation_fn=activation_fn, n_classes=num_classes),  # 16
 					'6': SNConvBlock(base_channel * 4, base_channel * 4, kernel_size, padding, downsample=True, activation_fn=activation_fn, n_classes=num_classes),  # 8
 					'7': SNConvBlock(base_channel * 4, base_channel * 4, kernel_size, padding, downsample=True, activation_fn=activation_fn, n_classes=num_classes),  # 4
 					'8': SNConvBlock(base_channel * 4, base_channel * 4, kernel_size, padding, 4, 0, activation_fn=activation_fn)
@@ -504,13 +510,13 @@ class Discriminator(nn.Module):
 		else:
 			self.progression = nn.ModuleDict(
 				{
-					'0': ConvBlock(base_channel // 16, base_channel//8, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 512
-					'1': ConvBlock(base_channel // 8, base_channel // 4, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 256
+					'0': ConvBlock(base_channel // 8, base_channel//4, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 512
+					'1': ConvBlock(base_channel // 4, base_channel // 2, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 256
 
-					'2': ConvBlock(base_channel // 4, base_channel // 2, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 128
-					'3': ConvBlock(base_channel // 2, base_channel, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 64
-					'4': ConvBlock(base_channel, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 32
-					'5': ConvBlock(base_channel * 2, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 16
+					'2': ConvBlock(base_channel // 2, base_channel, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 128
+					'3': ConvBlock(base_channel, base_channel * 2, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 64
+					'4': ConvBlock(base_channel * 2, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 32
+					'5': ConvBlock(base_channel * 4, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 16
 					'6': ConvBlock(base_channel * 4, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 8
 					'7': ConvBlock(base_channel * 4, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 4
 					'8': ConvBlock(base_channel * 4, base_channel * 4, 3, 1, 4, 0, activation_fn=activation_fn)
@@ -520,22 +526,22 @@ class Discriminator(nn.Module):
 
 		def from_rgb(out_channel):
 			if from_rgb_activate:
-				return nn.Sequential(EqualConv2d(3, out_channel, 1), self.activation)
+				return nn.Sequential(EqualConv2d(1, out_channel, 1), self.activation)
 			else:
-				return EqualConv2d(3, out_channel, 1)
+				return EqualConv2d(1, out_channel, 1)
 
 		self.ins_norm = nn.InstanceNorm2d(base_channel * 4)
 		make_from_rgb = lambda x: from_rgb(x)
 
 		self.from_rgb = nn.ModuleList(
 			[
-				make_from_rgb(base_channel//16),
 				make_from_rgb(base_channel//8),
-
 				make_from_rgb(base_channel//4),
+
 				make_from_rgb(base_channel//2),
 				make_from_rgb(base_channel),
 				make_from_rgb(base_channel*2),
+				make_from_rgb(base_channel*4),
 				make_from_rgb(base_channel*4),
 				make_from_rgb(base_channel*4),
 				make_from_rgb(base_channel*4),
@@ -545,12 +551,19 @@ class Discriminator(nn.Module):
 		self.n_layer = len(self.progression)
 
 		self.embedding = spectral_norm(nn.Embedding(num_classes, base_channel * 4))
+		projection_layers = []
 
 		if projection:
-			self.linear = nn.Sequential(EqualLinear(base_channel * 4, base_channel*16), nn.LeakyReLU(0.2, inplace=True), EqualLinear(base_channel * 16, 1))
+			# for _ in range(4):
+			# 	projection_layers.extend([EqualLinear(base_channel * 4, base_channel*4), nn.LeakyReLU(0.2)])
+			# projection_layers.append(EqualLinear(base_channel * 4, 1))
+			# self.linear = nn.Sequential(*projection_layers)
+			self.linear = nn.Sequential(EqualLinear(base_channel * 4, base_channel*16), self.activation, EqualLinear(base_channel * 16, 1))
+
 		else:
 			self.linear = EqualLinear(base_channel*4, 1)
 
+		self.register_buffer('moving_latent', torch.zeros((base_channel * 4)))
 
 	def forward(self, input, step=0, alpha=-1, label=None):
 		out = None

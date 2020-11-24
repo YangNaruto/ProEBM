@@ -12,6 +12,7 @@ import os
 
 
 def resize_and_convert(img, size, quality=100):
+
     img = trans_fn.resize(img, (size, size), Image.LANCZOS)
     img = trans_fn.center_crop(img, size)
     buffer = BytesIO()
@@ -74,4 +75,4 @@ if __name__ == '__main__':
     # with lmdb.open("_".join([args.out, str(args.data_ratio)]), map_size=1024 ** 4, readahead=False) as env:
     with lmdb.open(args.out, map_size=1024 ** 4, readahead=False) as env:
         with env.begin(write=True) as txn:
-            prepare(txn, imgset, args.n_worker, sizes=(8, 16, 32, 64, 128, 256), data_ratio=args.data_ratio)
+            prepare(txn, imgset, args.n_worker, sizes=(8, 16, 32, 64, 128, 256, 512), data_ratio=args.data_ratio)

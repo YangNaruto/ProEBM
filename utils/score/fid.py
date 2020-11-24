@@ -56,7 +56,6 @@ def im_resize(img, size=128):
     img = trans_fn.center_crop(img, size)
     return img
 
-
 def get_activations_from_tensor(sample, model, batch_size=50, dims=2048, cuda=False, verbose=False):
     model.eval()
     N = sample.shape[0]

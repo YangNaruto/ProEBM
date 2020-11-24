@@ -19,7 +19,8 @@ from utils import dataset_util
 from utils.logger import Logger
 from utils.submit import _get_next_run_id_local, _create_run_dir_local, _copy_dir, _save_args
 from utils.score import fid
-from utils.util import EMA
+from utils.util import EMA, read_image_folder, count_parameters, read_single_image, plot_heatmap, nearest_neighbor
+
 seed = 1
 t.manual_seed(seed)
 if t.cuda.is_available():
@@ -35,60 +36,31 @@ class ProgressiveEBM(object):
 		self.default_lr = args.lr_default
 		self.device = t.device(args.device if torch.cuda.is_available() else 'cpu')
 
-		num_classes = 10 if args.dataset == 'cifar10' else 1000
+		self.resolution = [2**x for x in range(int(math.log2(args.init_size)) - 1, int(math.log2(args.max_size))+1)]
+		self.create_nets(len(self.resolution)-1, args)
 
-		self.ebm = networks.Discriminator(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
-		                                  projection=args.projection, activation_fn=args.activation_fn,
-		                                  from_rgb_activate=args.from_rgb_activate, bn=args.bn, split=args.split_bn,
-		                                  add_attention=args.attention, num_classes=num_classes).to(self.device)
-
-		# create ema model
-		self.ebm_ema = networks.Discriminator(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
-		                                  projection=args.projection, activation_fn=args.activation_fn,
-		                                  from_rgb_activate=args.from_rgb_activate, bn=args.bn, split=args.split_bn,
-		                                      add_attention=args.attention, num_classes=num_classes).to(self.device)
-		self.ebm_ema.train(False)
-		self.ema_manager = EMA(self.ebm, self.ebm_ema)
-		# self._momentum_update_model(self.ebm, self.ebm_ema, momentum=0.0)
-		# print(self.ebm)
 		self.args = args
 		self.truncation = args.truncation
 		self.min_step, self.max_step = int(math.log2(args.init_size)) - 2, int(math.log2(args.max_size)) - 2
 		self.val_clip = args.val_clip
 		self.noise_ratio = args.noise_ratio
-		self.resolution = [2 ** x for x in range(2, 10)]
+
 		self.progressive = args.pro
-		self.optimizer = torch.optim.Adam(self.ebm.parameters(), lr=self.default_lr, betas=(0.0, 0.99), amsgrad=args.amsgrad)
+		print("Total number of parameters: ", sum([count_parameters(self.ebm[str(step)]) for step in range(self.min_step, self.max_step+1)]))
 
+	def switch_optimzer(self, step):
+		self.optimizer = torch.optim.Adam(self.ebm[str(step)].parameters(), lr=self.args.lr_default, betas=(0.5, 0.999))
 
-	def requires_grad(self, step, alpha=1, flag=True):
-		if alpha > 0.5:
-			for p in self.ebm.parameters():
-				p.requires_grad = True
-		else:
-			for p in self.ebm.parameters():
-				p.requires_grad = False
+	def requires_grad(self, flag=True, step=-1):
+		for p in self.ebm[str(step)].parameters():
+			p.requires_grad = flag
 
-			for p in self.ebm.progression[str(8-step)].parameters():
-				p.requires_grad = True
-
-			for p in self.ebm.from_rgb[8-step].parameters():
-				p.requires_grad = True
-
-			# for p in self.ebm.linear.parameters():
-			# 	p.requires_grad = True
-		trainable_parameters = filter(lambda p: p.requires_grad, self.ebm.parameters())
-
-		self.optimizer = torch.optim.Adam(trainable_parameters, lr=self.default_lr, betas=(0.0, 0.99), amsgrad=args.amsgrad)
-
-	@staticmethod
-	def slerp(val, low, high):
-		low_norm = low / torch.norm(low, dim=1, keepdim=True)
-		high_norm = high / torch.norm(high, dim=1, keepdim=True)
-		omega = torch.acos((low_norm * high_norm).sum(1))
-		so = torch.sin(omega)
-		res = (torch.sin((1.0 - val) * omega) / so).unsqueeze(1) * low + (torch.sin(val * omega) / so).unsqueeze(1) * high
-		return res
+	def create_nets(self, n, args):
+		num_classes = 10 if args.dataset == 'cifar10' else 1000
+		self.ebm = nn.ModuleDict({str(i): networks.Discriminator(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
+		                                  projection=args.projection, activation_fn=args.activation_fn,
+		                                  from_rgb_activate=args.from_rgb_activate, bn=args.bn, split=args.split_bn,
+		                                  add_attention=args.attention, num_classes=num_classes).to(self.device) for i in range(1, n+1)})
 
 	@staticmethod
 	def add_noise(x, sigma=1e-2):
@@ -96,6 +68,8 @@ class ProgressiveEBM(object):
 
 	def sample_data(self, dataset, batch_size, image_size=4):
 		dataset.resolution = image_size
+		if batch_size == -1:
+			batch_size = len(dataset)
 		loader = DataLoader(dataset, shuffle=True, batch_size=batch_size, num_workers=1, drop_last=True, pin_memory=True)
 		return loader
 
@@ -114,8 +88,6 @@ class ProgressiveEBM(object):
 
 	def polynomial(self, t, T, base_lr, end_lr=0.0001, power=1.):
 		lr = (base_lr - end_lr) * ((1 - t / T) ** power) + end_lr
-
-		# lr = a * (b + t) ** power
 		return lr
 
 	def adjust_lr(self, lr):
@@ -126,101 +98,36 @@ class ProgressiveEBM(object):
 	def langevin_sampler(self, x_k, sampler_step, step, alpha, from_beginning=False, label=None, soft=False, sampling=False):
 		alphas = [1 for _ in range(step)]
 		alphas.append(alpha)
-
+		langevin_steps = sampler_step
 		if step == self.min_step or not self.progressive:
 			step_list = range(step, step + 1)
 		else:
 			if from_beginning:
 				step_list = range(self.min_step, step + 1)
-				self.noise_ratio = 0.
 			else:
-				step_list = range(step - 1, step + 1) if ((alpha < 0.5 or self.noise_ratio < 1) and soft) else range(step, step+1)
+				step_list = range(step - 1, step + 1)
 
-		# initial = self.args.initial if self.args.noise_ratio == 1.0 else 'gaussian'
 		step_list = list(step_list)
-
-		beta = 0.0 if self.args.initial == 'gaussian' else 0.0
+		K = 0
 		for index, s in enumerate(step_list):
 			if index != 0:
 				x_k = F.interpolate(x_k.clone().detach(), scale_factor=2, mode='nearest')
-				x_k = (1 - self.noise_ratio * alphas[s]) * x_k + \
-				      self.noise_ratio * alphas[s] * self.sample_p_0(x_k.shape[0], x_k.shape[-1], n_ch=3, initial=self.args.initial)
-
 				x_k = torch.clamp(x_k, -self.val_clip, self.val_clip)
+
 			x_k.requires_grad_(True)
-			# langevin_steps = int(sampler_step / (len(step_list) - index))
-			langevin_steps = sampler_step
-			e = 0.1
-			images = []
+
 			for k in range(langevin_steps):
-
-				if self.args.ema and sampling:
-					loss = self.ebm_ema(x_k, step=s, alpha=alphas[s], label=label).sum() + beta * (-x_k**2 / (2*e**2)).sum()
-				else:
-					loss = self.ebm(x_k, step=s, alpha=alphas[s], label=label).sum() + beta * (-x_k**2 / (2*e**2)).sum()
-
+				loss = self.ebm[str(s)](x_k, step=s, alpha=alphas[s], label=label).sum()
 				f_prime = t.autograd.grad(loss, [x_k], retain_graph=True)[0]
-				# lr = self.cyclic(langevin_steps, k, M=1, lr=self.args.langevin_lr, min_lr=self.args.langevin_lr) if self.args.cyclic else self.args.langevin_lr
-				# sigma = self.cyclic(langevin_steps, k, M=1, lr=2e-1, min_lr=1e-2) if self.args.cyclic else 1e-2
 
-				sigma = self.polynomial(k, langevin_steps, base_lr=1.5e-2, end_lr=5e-3, power=1) if self.args.cyclic else 1e-2
+				sigma = self.polynomial(K, langevin_steps*len(step_list), base_lr=1.5e-2, end_lr=0e-4, power=1) if self.args.cyclic else 5e-3
 				lr = self.polynomial(k, langevin_steps, base_lr=self.args.langevin_lr, end_lr=self.args.langevin_lr, power=1) if self.args.cyclic else self.args.langevin_lr
-				# sigma = 2e-1 * (1 + 10*k)**(-0.55) if self.args.cyclic else 1e-2
-				# lr = self.args.langevin_lr * (1 + 10*k)**(-0.55) if self.args.cyclic else self.args.langevin_lr
 
 				x_k.data += lr * f_prime + sigma * t.randn_like(x_k)
-				# x_k.data.clamp_(-self.val_clip, self.val_clip)
-
-				images.append(x_k.clone().detach())
+				K += 1
 			x_k.data.clamp_(-self.val_clip, self.val_clip)
 
-		return x_k.clone().detach()
-		# return images
-
-	def super_langevin_sampler(self, x_k, sampler_step, step, alpha, from_beginning=False, label=None, soft=False, sampling=False):
-		alphas = [1 for _ in range(step)]
-		alpha = 1.0
-		alphas.append(alpha)
-
-		# initial = self.args.initial if self.args.noise_ratio == 1.0 else 'gaussian'
-		step_list = [step]
-		x_k.requires_grad_(True)
-		x_k = F.interpolate(x_k, scale_factor=2, mode='bilinear')
-		x_k = (1 - self.noise_ratio * alphas[-1]) * x_k + \
-		      self.noise_ratio * alphas[-1] * self.sample_p_0(x_k.shape[0], x_k.shape[-1], n_ch=3, initial='gaussian')
-
-		x_k = torch.clamp(x_k, -self.val_clip, self.val_clip)
-
-		beta = 0.0 if self.args.initial == 'gaussian' else 0.0
-
-		for index, s in enumerate(step_list):
-			images = []
-			# langevin_steps = int(sampler_step / len(step_list))
-			# langevin_steps = int(sampler_step / (len(step_list) - index))
-			langevin_steps = sampler_step
-			e = 0.1
-			for k in range(langevin_steps):
-
-				if self.args.ema and sampling:
-					loss = self.ebm_ema(x_k, step=s, alpha=alphas[s], label=label).sum() + beta * (-x_k**2 / (2*e**2)).sum()
-				else:
-					loss = self.ebm(x_k, step=s, alpha=alphas[s], label=label).sum() + beta * (-x_k**2 / (2*e**2)).sum()
-
-				f_prime = t.autograd.grad(loss, [x_k], retain_graph=True)[0]
-				lr = self.cyclic(langevin_steps, k, M=1, lr=self.args.langevin_lr, min_lr=self.args.langevin_lr) if self.args.cyclic else self.args.langevin_lr
-				# sigma = self.cyclic(langevin_steps, k, M=1, lr=1e-1, min_lr=1e-3) if self.args.cyclic else 1e-2
-
-				sigma = self.polynomial(k, langevin_steps, base_lr=2e-1, end_lr=1e-2, power=2) if self.args.cyclic else 1e-2
-				# lr = self.polynomial(k, langevin_steps, base_lr=self.args.langevin_lr, end_lr=1e-1, power=1) if self.args.cyclic else self.args.langevin_lr
-				# sigma = 2e-1 * (1 + 10*k)**(-0.55) if self.args.cyclic else 1e-2
-				# lr = self.args.langevin_lr * (1 + 10*k)**(-0.55) if self.args.cyclic else self.args.langevin_lr
-				# lr =
-				# sigma = sqrt(2*lr)
-				x_k.data += lr * f_prime + sigma * t.randn_like(x_k)
-				images.append(x_k.clone().detach())
-			x_k.data.clamp_(-self.val_clip, self.val_clip)
-
-		return images
+		return x_k.clone()
 
 
 	def sample_p_0(self, bs, im_sz, n_ch=3, initial='gaussian'):
@@ -238,116 +145,245 @@ class ProgressiveEBM(object):
 	def plot(p, x):
 		m = x.shape[0]
 		row = int(sqrt(m))
-		tv.utils.save_image(x[:row ** 2], p, padding=1, normalize=True, range=(-1., 1.), nrow=row)
+		tv.utils.save_image(x[:row ** 2], p, padding=0, normalize=True, range=(-1., 1.), nrow=row)
 		return
 
 	def load_ckpt(self, ckpt_name):
 		ckpt = torch.load(ckpt_name)
-		self.ebm.load_state_dict(ckpt['ebm'])
-		self.ebm_ema.load_state_dict(ckpt['ebm'])
-		self.optimizer.load_state_dict(ckpt['optimizer'])
 		step = ckpt['step']
 		alpha = ckpt['alpha']
+		for i in range(step):
+			self.ebm[str(i+1)].load_state_dict(ckpt['ebm-%d'%i])
+
 		used_sample = ckpt['used_sample']
 		return step, alpha, used_sample
 
-
-	# def evaluate(self, ckpt_name, sampler_step, fig_name='samples'):
-	# 	with torch.no_grad():
-	# 		step, alpha, _= self.load_ckpt(ckpt_name)
-	# 		samples = self.langevin_sampler(x_k=x_k, sampler_step=sampler_step, step=step, alpha=alpha)
-	# 		sample_path = os.path.join(os.path.dirname(ckpt_name), 'samples')
-	# 		if not os.path.exists(sample_path):
-	# 			os.makedirs(sample_path)
-	# 		self.plot(os.path.join(sample_path, f'{fig_name}_{sampler_step}.png'), samples)
-	# 		return
-	#
-	@staticmethod
-	def test_loader(dataset_name='cifar10', batch_size=64):
+	def test_loader(self, dataset, dataset_name='cifar10', batch_size=64):
 		transform = tr.Compose(
 			[tr.ToTensor(),
 			 tr.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-		batch_size = 64
 		if dataset_name == 'cifar10':
-			dataset = tv.datasets.CIFAR10('./data', train=False, transform=transform, target_transform=None, download=True)
+			dataset = tv.datasets.CIFAR10('./data', train=True, transform=transform, target_transform=None, download=False)
 			data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
-			dataiter = iter(data_loader)
-			images, labels = next(dataiter)
-		return images
+		else:
+			data_loader = self.sample_data(dataset, batch_size, 64)
 
-	def denoise(self, dataset_name='cifar10', batch_size=64):
+		return data_loader
 
-		images = self.test_loader(dataset_name=dataset_name, batch_size=64)
+	def find_knn(self, dataset, batch_size=5, k=10, step=3):
+		im_size = self.resolution[step]
+		if not os.path.exists('knn'):
+			os.mkdir('knn')
+		else:
+			shutil.rmtree('knn')
+			os.mkdir('knn')
+		data_loader = self.test_loader(dataset, dataset_name=args.dataset, batch_size=10000)
+		dataiter = iter(data_loader)
+		images, _ = next(dataiter)
+		images = torch.flatten(images, start_dim=1).unsqueeze(0)
 		images = images.to(self.device)
-		noisy_images = (1.0*torch.randn_like(images)).clamp(-1, 1)
-		noisy_images = self.sample_p_0(images.shape[0], images.shape[-1], n_ch=3, initial='uniform')
-		clean_images = self.langevin_sampler(x_k=noisy_images.clone().detach(), sampler_step=100, step=int(math.log2(self.args.max_size)) - 2, alpha=1, label=None, soft=True,
-		                                             sampling=True)
-		row = int(sqrt(batch_size))
-		if not os.path.exists('noise'):
-			os.mkdir('noise')
+		for i in range(500):
+			x0 = self.sample_p_0(batch_size, im_size, n_ch=3, initial=self.args.initial).clone().detach()
+			samples = self.langevin_sampler(x_k=x0, sampler_step=self.args.langevin_step, step=step, alpha=1, label=None, soft=True,
+												 sampling=False)
+			samples = torch.flatten(samples, start_dim=1).unsqueeze(1)
+
+			nearest_neighbor(samples, images, i=i, k=10, logdir='knn', im_size=im_size)
+
+
+	def inpainting(self, dataset, args, batch_size=64, step=3):
+		if not os.path.exists('inpainting'):
+			os.mkdir('inpainting')
 		else:
-			shutil.rmtree('noise')
-			os.mkdir('noise')
-		tv.utils.save_image(images[:row ** 2], 'noise/raw_denoise.png', padding=1, normalize=True, range=(-1., 1.), nrow=row)
-		tv.utils.save_image(noisy_images[:row ** 2], 'noise/noisy.png', padding=1, normalize=True, range=(-1., 1.), nrow=row)
-		print(len(clean_images))
-		for i in range(len(clean_images)):
-			tv.utils.save_image(clean_images[i][:row ** 2], 'noise/clean_{}.png'.format(i), padding=1, normalize=True, range=(-1., 1.), nrow=row)
-
-
-	def super_resolution(self, dataset_name='cifar10', batch_size=64):
-		images = self.test_loader(dataset_name=dataset_name, batch_size=64)
-
-		if dataset_name == 'cifar10':
-			scale_factor = 0.5
-
-		# low_images = tr.ToPILImage(images)
-		low_images = F.interpolate(images, scale_factor=scale_factor, mode='bicubic').to(self.device)
-
-		high = self.super_langevin_sampler(x_k=low_images.clone().detach(), sampler_step=25, step=int(math.log2(self.args.max_size)) - 2, alpha=1, label=None, soft=True,
-		                                             sampling=True, from_beginning=False)
+			shutil.rmtree('inpainting')
+			os.mkdir('inpainting')
 		row = int(sqrt(batch_size))
-		if not os.path.exists('super'):
-			os.mkdir('super')
+
+		data_loader = self.test_loader(dataset, dataset_name=args.dataset, batch_size=batch_size)
+		dataiter = iter(data_loader)
+		im_size = self.resolution[step]
+		mask = torch.ones((batch_size, 3, im_size, im_size), device=self.device)
+		index = torch.randint(0, 64, (batch_size, 8, 64), device=self.device)
+		mask[:, 0].scatter_(1, index, 0)
+		mask[:, 1].scatter_(1, index, 0)
+		mask[:, 2].scatter_(1, index, 0)
+
+		for i in range(1000):
+			images, labels = next(dataiter)
+			images = images.to(self.device)
+			noise = torch.zeros_like(mask)* (1 - mask)
+
+			x = images.clone().detach() * mask + noise
+			x_masked = x.clone().detach()
+			for _ in range(int(self.args.langevin_step/2)):
+				x = self.langevin_sampler(x_k=x, sampler_step=1, step=step, alpha=1, label=None, soft=True, sampling=False)
+				x = x * (1 - mask) + images * mask
+			group = torch.cat((x_masked, x, images), dim=0)
+			tv.utils.save_image(group, 'inpainting/sample_{:02d}.png'.format(i), padding=0, normalize=True,
+									range=(-1., 1.),
+									nrow=batch_size)
+
+	def interpolation(self, step, batch_size=4):
+		if not os.path.exists('interpolation'):
+			os.mkdir('interpolation')
 		else:
-			shutil.rmtree('super')
-			os.mkdir('super')
-		tv.utils.save_image(images[:row ** 2], 'super/raw_super.png', padding=1, normalize=True, range=(-1., 1.), nrow=row)
-		tv.utils.save_image(low_images[:row ** 2], 'super/low.png', padding=1, normalize=True, range=(-1., 1.), nrow=row)
-		for i in range(len(high)):
+			shutil.rmtree('interpolation')
+			os.mkdir('interpolation')
+		if step == self.min_step or not self.progressive:
+			im_size = self.resolution[self.min_step]
+		else:
+			if self.args.from_beginning:
+				im_size = self.resolution[self.min_step]
+			else:
+				im_size = self.resolution[step - 1]
 
-			tv.utils.save_image(high[i][:row ** 2], 'super/high_{}.png'.format(i), padding=1, normalize=True, range=(-1., 1.), nrow=row)
+		beta = list(range(0, 11, 1))
+		for i in range(500):
+			x0 = self.sample_p_0(batch_size, im_size, n_ch=3, initial=self.args.initial).clone().detach()
+			x1 = self.sample_p_0(batch_size, im_size, n_ch=3, initial=self.args.initial).clone().detach()
 
-	def inpainting(self):
-		pass
+			sequence = torch.zeros((batch_size, 11, 3, self.resolution[step], self.resolution[step])).to(self.device)
+			for j in range(0, 11):
+				x = np.sqrt(1 - (beta[j]/10)**2) * x0 + beta[j]/10 * x1
+				images = self.langevin_sampler(x_k=x, sampler_step=self.args.langevin_step, step=step, alpha=1, label=None, soft=True,
+													 sampling=False, from_beginning=self.args.from_beginning)
+				sequence[:, j] = images
+			tv.utils.save_image(sequence.view(batch_size*11, 3, self.resolution[step], self.resolution[step]), 'interpolation/seq_{:02d}.png'.format(i), padding=0, normalize=True,
+								range=(-1., 1.),
+								nrow=11)
+
+
+	def from_noise(self,  step, batch_size=4):
+		path = 'samples/church'
+		if not os.path.exists(path):
+			os.makedirs(path)
+		else:
+			shutil.rmtree(path)
+			os.makedirs(path)
+		# im_size = self.resolution[step]
+		if step == self.min_step or not self.progressive:
+			im_size = self.resolution[self.min_step]
+		else:
+			if self.args.from_beginning:
+				im_size = self.resolution[self.min_step]
+			else:
+				im_size = self.resolution[step - 1]
+
+		row = int(sqrt(batch_size))
+		for i in range(5000):
+			x0 = self.sample_p_0(batch_size, im_size, n_ch=3, initial=self.args.initial).clone().detach()
+			images = self.langevin_sampler(x_k=x0, sampler_step=self.args.langevin_step, step=step, alpha=1, label=None, soft=True,
+												 sampling=False, from_beginning=self.args.from_beginning)
+
+
+			tv.utils.save_image(images, os.path.join(path, 'sample_{:03d}.png'.format(i)), padding=0, normalize=True,
+							   range=(-1., 1.),
+								nrow=row)
+			# interval = 5
+			# seq_len = images[:, ::interval].shape[1]
+			# tv.utils.save_image(images[:, ::interval].view(batch_size*seq_len, 3, im_size, im_size), 'from_noise/seq_{:02d}.png'.format(i), padding=0, normalize=True,
+			# 					range=(-1., 1.),
+			# 					nrow=seq_len)
+			print(f'Saving {i}-th image...')
+
+	def eval_fid(self, step, batch_size=64):
+		if step == self.min_step or not self.progressive:
+			im_size = self.resolution[self.min_step]
+		else:
+			if self.args.from_beginning:
+				im_size = self.resolution[self.min_step]
+			else:
+				im_size = self.resolution[step - 1]
+
+		samples = []
+		for _ in range(3_000 // batch_size):
+
+			x0 = self.sample_p_0(batch_size, im_size, n_ch=3, initial=self.args.initial).clone().detach()
+			sample = self.langevin_sampler(x_k=x0, sampler_step=self.args.langevin_step, step=step, alpha=1, label=None, soft=True,
+												 sampling=False, from_beginning=self.args.from_beginning)
+			samples.append(self.normalize_tensor(sample).cpu())
+		samples = torch.cat(samples, dim=0)
+
+		fid_score = fid.calculate_fid_given_sample_path(samples, "./stats/celeba-hq_128.npz", batch_size//4, cuda=self.device, dims=2048)
+		del samples
+		print(fid_score)
+		return
+
+	def anti_corrupt(self, dataset, args, batch_size=4, step=3):
+		if not os.path.exists('anti_corrupt'):
+			os.mkdir('anti_corrupt')
+		else:
+			shutil.rmtree('anti_corrupt')
+			os.mkdir('anti_corrupt')
+		row = int(sqrt(batch_size))
+		interval = 1
+		data_loader = self.test_loader(dataset, dataset_name=args.dataset, batch_size=batch_size)
+		dataiter = iter(data_loader)
+		for i in range(200):
+
+			images, labels = next(dataiter)
+			images = images.to(self.device)
+
+			noise = torch.rand_like(images)
+			low_mask = noise < 1.0
+			# high_mask = (noise > 0.05) & (noise < 0.1)
+
+			images_corrupt = images.clone()
+			# images_corrupt[low_mask] = -0.8
+			# images_corrupt[high_mask] = 0.8
+			images_corrupt[low_mask] = images_corrupt[low_mask]  + 0.2*torch.randn_like(images_corrupt[low_mask] )
+			# images_corrupt[high_mask] = images_corrupt[high_mask] + 0.3*torch.randn_like(images_corrupt[high_mask])
+			# images_corrupt = torch.clamp(images_corrupt, -1, 1)
+			x0 = images_corrupt.clone().detach()
+			clean_images, sample_seq  = self.langevin_sampler(x_k=x0, sampler_step=10, step=step, alpha=1, label=None, soft=True,
+														 sampling=False)
+			group = torch.cat((images_corrupt, clean_images, images), dim=0)
+			tv.utils.save_image(group, 'anti_corrupt/group_{:02d}.png'.format(i), padding=0, normalize=True,
+							   range=(-1., 1.),
+								nrow=3)
+			plot_heatmap(sample_seq.cpu().numpy(), fig_name=os.path.join('anti_corrupt', 'group_{:02d}_heatmap.png'.format(i)))
+
+			seq_path = os.path.join('anti_corrupt',  'group_{:02d}_seq.png'.format(i))
+			seq_len = sample_seq[:, ::interval].shape[1]
+			tv.utils.save_image(sample_seq[:, ::interval].view(seq_len, 3, 32, 32), seq_path, padding=0, normalize=True, range=(-1., 1.),
+			                    nrow=seq_len)
+		# tv.utils.save_image(images[:row ** 2], 'anti_corrupt/raw_anticorrupt.png', padding=0, normalize=True, range=(-1., 1.),
+		# 					nrow=row)
+		# tv.utils.save_image(images_corrupt[:row ** 2], 'anti_corrupt/corrupt.png', padding=0, normalize=True, range=(-1., 1.),
+		# 					nrow=row)
+		# tv.utils.save_image(clean_images[:row ** 2], 'anti_corrupt/clean_{:02d}.png'.format(i), padding=0,
+		# 					normalize=True, range=(-1., 1.),
+		# 					nrow=row)
+		# for i, img in enumerate(clean_images):
+		# 	tv.utils.save_image(clean_images[i][:row ** 2], 'anti_corrupt/clean_{:02d}.png'.format(i), padding=0, normalize=True, range=(-1., 1.),
+		# 					nrow=row)
 
 	@staticmethod
 	def normalize_tensor(tensor):
 		return tensor.add_(-tensor.min()).div_(tensor.max() - tensor.min() + 1e-5)
 
-	def prepare_sample(self, sampler_step, im_size, step, alpha, batch_size, folder_name=None, soft=False):
+	def prepare_sample(self, sampler_step, im_size, step, alpha, batch_size, folder_name=None, soft=False, from_beginning=False):
 		if folder_name is not None:
 			path = os.path.join(self.args.run_dir, folder_name)
 			if not os.path.exists(path):
 				os.makedirs(path)
 		samples = []
 		label = None
-		self.ebm.eval()
+		self.ebm[str(step)].eval()
 		with torch.enable_grad():
 			for _ in range(30_000 // batch_size):
-				x_k = self.sample_p_0(bs=batch_size, im_sz=im_size, initial=args.initial)
+				x_k = self.sample_p_0(bs=batch_size, im_sz=im_size, initial=self.args.initial)
 				if self.args.conditional:
 					label = torch.randint(0, 10, size=(batch_size, ), device=self.device)
-				sample = self.langevin_sampler(x_k=x_k, sampler_step=sampler_step, step=step, alpha=alpha, label=label, soft=soft, sampling=True)
+				sample = self.langevin_sampler(x_k=x_k, sampler_step=sampler_step, step=step, alpha=alpha, label=label, soft=soft, sampling=True, from_beginning=from_beginning)
 				samples.append(self.normalize_tensor(sample).cpu())
 		samples = torch.cat(samples, dim=0)
 		return samples
 
-	def calculate_fid(self, stats_path, sampler_step, im_size, step, alpha, soft=False, batch_size=64, dims=2048):
-		samples = self.prepare_sample(sampler_step=sampler_step, im_size=im_size, step=step, alpha=alpha, batch_size=batch_size, soft=soft)
-		fid_score = fid.calculate_fid_given_sample_path(samples, stats_path, batch_size, cuda=self.device, dims=dims)
+	def calculate_fid(self, stats_path, sampler_step, im_size, step, alpha, from_beginning=False, soft=False, batch_size=64, dims=2048):
+		samples = self.prepare_sample(sampler_step=sampler_step, im_size=im_size, step=step, alpha=alpha, batch_size=batch_size, soft=soft, from_beginning=from_beginning)
+		fid_score = fid.calculate_fid_given_sample_path(samples, stats_path, batch_size//4, cuda=self.device, dims=dims)
 		del samples
 		return fid_score
 
@@ -359,12 +395,13 @@ class ProgressiveEBM(object):
 		else:
 			used_sample = 0
 
-		base_sigma = 1e-2
+		base_sigma = args.base_sigma
 		resolution = 4 * 2 ** step
 		loader = self.sample_data(
 			dataset, args.batch.get(resolution, args.batch_default), resolution
 		)
 		data_loader = iter(loader)
+		self.switch_optimzer(step)
 		self.adjust_lr(args.lr.get(resolution, self.default_lr))
 		prev_step = 0
 		max_step = int(math.log2(args.max_size)) - 2
@@ -374,27 +411,20 @@ class ProgressiveEBM(object):
 		interval = 2000
 		T = args.iterations
 		for i in range(T):
-			self.ebm.train()
-			self.ebm.zero_grad()
-			alpha = min(1, 1 / args.phase * (used_sample + 1))
+			self.ebm[str(step)].train()
+			self.ebm[str(step)].zero_grad()
+			alpha = min(1, 1 / args.phases.get(resolution, args.phase) * (used_sample + 1))
 
 			if (resolution == args.init_size and args.ckpt is None) or final_progress:
 				alpha = 1
 
-			if used_sample > 2 * args.phase:
-				torch.save(
-					{
-						'used_sample': used_sample,
-						'alpha': alpha,
-						'step': step,
-						'ebm': self.ebm.state_dict(),
-						'ebm_ema': self.ebm_ema.state_dict(),
-						'optimizer': self.optimizer.state_dict(),
-					},
-					f'{save_path}/train_step-{i}.model',
-				)
+			if used_sample > 2 * args.phases.get(resolution, args.phase):
+
 				used_sample = 0
 				step += 1
+				if step <= max_step:
+					self.switch_optimzer(step)
+					self.ebm[str(step)].load_state_dict(self.ebm[str(step-1)].state_dict())
 
 				if step > max_step:
 					step = max_step
@@ -403,8 +433,7 @@ class ProgressiveEBM(object):
 					alpha = 0
 
 				resolution = 4 * 2 ** step
-				if resolution > 32:
-					interval = 4000
+
 				loader = self.sample_data(
 					dataset, args.batch.get(resolution, args.batch_default), resolution
 				)
@@ -440,68 +469,48 @@ class ProgressiveEBM(object):
 				if args.from_beginning:
 					im_size = self.resolution[self.min_step]
 				else:
-					im_size = self.resolution[step - 1] if ((alpha < 0.5 or self.noise_ratio < 1) and args.soft) else self.resolution[step]
+					im_size = self.resolution[step - 1]
 
-			self.ebm.eval()
+			self.ebm[str(step)].eval()
 			with torch.enable_grad():
-
 				x_k = self.sample_p_0(bs=b_size, im_sz=im_size, initial=args.initial)
-				x_k_cp = x_k.clone().detach()
 				x_q = self.langevin_sampler(x_k=x_k, sampler_step=args.langevin_step, step=step, alpha=alpha, from_beginning=args.from_beginning, soft=args.soft)
-				if args.ema and step == max_step and alpha == 1:
-					x_q_ema = self.langevin_sampler(x_k=x_k_cp, sampler_step=args.langevin_step, step=step, alpha=alpha, from_beginning=args.from_beginning, soft=args.soft,
-					                            sampling=True)
 
-			self.ebm.train()
-			self.requires_grad(step=step, alpha=alpha)
-			self.adjust_lr(args.lr.get(resolution, self.default_lr))
-
+			self.ebm[str(step)].train()
 			x = torch.cat((x_p_d, x_q), dim=0)
 			label = torch.cat((real_label, fake_label), dim=0) if args.conditional else None
-			energy = self.ebm(x, step=step, alpha=alpha, label=label)
+			energy =self.ebm[str(step)](x, step=step, alpha=alpha, label=label)
 
 			pos_energy, neg_energy = [e for e in torch.split(energy, [x_k.shape[0], x_q.shape[0]])]
 
 			l2_regularizer = pos_energy**2 - neg_energy**2
 			L = (pos_energy - neg_energy + args.l2_coefficient*l2_regularizer).mean()
-
 			self.optimizer.zero_grad()
-
 			(-L).backward()
 			self.optimizer.step()
-			#
 
-			if args.ema:
-				if step == max_step and alpha == 1:
-				# if i > args.ema_start:
-					self.ema_manager.update(decay=args.momentum)
-				else:
-					self.ema_manager.update(decay=0.)
-
-			if i % 100 == 0:
+			if i % 400 == 0:
 				print('Itr: {:>6d}, Kimg: {:>8d}, Alpha: {:>3.2f}, Res: {:>3d}, f(x_p_d)={:8.4f}, f(x_q)={:>8.4f}'.
 				      format(i, total_used_samples // 1000, alpha, resolution, pos_energy.mean(), neg_energy.mean()))
 				if abs(L.data) > 1000:
 					break
 				self.plot(os.path.join(save_path, '{:>06d}_q.png'.format(i)), x_q)
-				if args.ema and step == max_step and alpha == 1:
-					self.plot(os.path.join(save_path, '{:>06d}_q_ema.png'.format(i)), x_q_ema)
-
 				if i % interval == 0 and i != 0:
-					if args.dataset in ['cifar10', 'imagenet', 'celeba'] and alpha==1 and args.max_size < 128:
+					if args.dataset in ['cifar10', 'imagenet', 'celeba', 'celeba-c', 'imagenet32x32'] and alpha==1 and args.max_size < 128:
+					# if args.dataset in ['imagenet32x32']:
 						print('Calculating FID score ...')
 
-						fid_score = self.calculate_fid(stats_path=args.stats_path, im_size=im_size, sampler_step=args.langevin_step, step=step, alpha=alpha, soft=args.soft)
+						fid_score = self.calculate_fid(stats_path=args.stats_path, im_size=im_size, sampler_step=args.langevin_step, from_beginning=args.from_beginning,
+						                               step=step, alpha=alpha, soft=args.soft)
 						print(f"Itr: {i:>6d}, FID:{fid_score:>10.3f}")
-					torch.save(
-						{
-							'used_sample': used_sample,
-							'alpha': alpha,
-							'step': step,
-							'ebm': self.ebm.state_dict(),
-							'optimizer': self.optimizer.state_dict(),
-							'ebm_ema':self.ebm_ema.state_dict(),
-						},
+					model_dict = {'ebm-%d' % i: self.ebm[str(i + 1)].state_dict() for i in range(step)}
+					model_dict.update({
+						'used_sample': used_sample,
+						'alpha': alpha,
+						'step': step,
+						# 'optimizer': self.optimizer.state_dict(),
+					})
+					torch.save(model_dict,
 						f'{save_path}/train_step-{i}.model',
 					)
 		return
@@ -575,19 +584,20 @@ if __name__ == "__main__":
 		os.makedirs(save_path)
 
 	if args.sched:
-		args.lr = {8: 0.0005, 16: 0.0008, 32: 0.0010, 64: 0.0010, 128: 0.0013}
-		args.batch = {8: 256, 16: 128, 32: 64, 64: 64, 128: 32, 256: 32}
-		# args.phases = {8:600_000, 16:2_000_000, 32: 4_000_000, 64: 10_000_000}
-
-		# for key, value in args.batch.items():
-		# 	args.batch.update({key: int(value * 64 / args.base_channel)})
+		args.lr = {8: 0.0005, 16: 0.0005, 32: 0.0005, 64: 0.0007, 128: 0.0010, 256: 0.0015, 512: 0.0015}
+		args.batch = {8: 256, 16: 128, 32: 64, 64: 64, 128: 32, 256: 16, 512: 16}
+		# args.phases = {8:args.phase, 16:args.phase*1.5, 32: args.phase*2, 64: args.phase*2, 128: args.phase*2, 256: args.phase*2, }
+		args.phases = {8:args.phase, 16:args.phase, 32: args.phase, 64: args.phase, 128: args.phase, 256: args.phase, 512: args.phase}
+		# if args.dataset in ['imagenet32x32', 'imagenet']:
+			# for key, value in args.batch.items():
+			# 	args.batch.update({key: int(value * 2)})
 		# args.batch = {4: 512, 8: 512, 16: 256, 32: 128, 64: 64, 128: 32, 256: 32}
 		args.lr = {key: value + 5e-4 for key, value in args.lr.items()}
 	else:
 		args.lr = {}
 		args.batch = {}
-	args.batch_default = 64
-	args.lr_default = 1e-3
+	args.batch_default = 32
+	args.lr_default = 5e-4
 
 	if args.mode == "train":
 		dir_name = f'step{args.langevin_step}-trunc{args.truncation}-res{args.max_size}-lr{args.langevin_lr}-{args.initial}-ch{args.base_channel}-{args.activation_fn}'
@@ -617,9 +627,32 @@ if __name__ == "__main__":
 
 		trainer.train(args, dataset, run_dir, load=args.load, ckpt_name=args.ckpt)
 
-	elif args.mode == "eval" and args.ckpt is not None:
-		trainer = ProgressiveEBM(args)
-		trainer.load_ckpt(ckpt_name=args.ckpt)
 
-		trainer.denoise(dataset_name='cifar10', batch_size=64)
+	elif args.mode == "eval" and args.ckpt is not None:
+		transform = tr.Compose(
+			[
+				# tr.Resize(32),
+				tr.RandomHorizontalFlip(),
+				tr.ToTensor(),
+				tr.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True),
+			]
+		)
+
+		dataset_path = os.path.join(args.data_root, args.dataset)
+		dataset = dataset_util.MultiResolutionDataset(dataset_path, transform)
+
+		trainer = ProgressiveEBM(args)
+
+		step, alpha, num = trainer.load_ckpt(ckpt_name=args.ckpt)
+
+		# trainer.find_knn(dataset, batch_size=2, step=step, k=10)
+		# trainer.interpolation(batch_size=1, step=step)
+		trainer.from_noise(batch_size=1, step=step)
+		# trainer.eval_fid(step, batch_size=100)
+		# trainer.inpainting(dataset, args, batch_size=1, step=step)
+
+		# trainer.anti_corrupt(dataset, args, batch_size=1, step=step)
+
+		# trainer.denoise(dataset_name='cifar10', batch_size=64)
+
 		# trainer.super_resolution(dataset_name='cifar10', batch_size=64)
