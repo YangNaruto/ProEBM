@@ -69,129 +69,6 @@ def equal_lr(module, name='weight'):
 
 	return module
 
-
-class FusedUpsample(nn.Module):
-	def __init__(self, in_channel, out_channel, kernel_size, padding=0):
-		super().__init__()
-
-		weight = torch.randn(in_channel, out_channel, kernel_size, kernel_size)
-		bias = torch.zeros(out_channel)
-
-		fan_in = in_channel * kernel_size * kernel_size
-		self.multiplier = sqrt(2 / fan_in)
-
-		self.weight = nn.Parameter(weight)
-		self.bias = nn.Parameter(bias)
-
-		self.pad = padding
-
-	def forward(self, input):
-		weight = F.pad(self.weight * self.multiplier, [1, 1, 1, 1])
-		weight = (
-						 weight[:, :, 1:, 1:]
-						 + weight[:, :, :-1, 1:]
-						 + weight[:, :, 1:, :-1]
-						 + weight[:, :, :-1, :-1]
-				 ) / 4
-
-		out = F.conv_transpose2d(input, weight, self.bias, stride=2, padding=self.pad)
-
-		return out
-
-
-class FusedDownsample(nn.Module):
-	def __init__(self, in_channel, out_channel, kernel_size, padding=0):
-		super().__init__()
-
-		weight = torch.randn(out_channel, in_channel, kernel_size, kernel_size)
-		bias = torch.zeros(out_channel)
-
-		fan_in = in_channel * kernel_size * kernel_size
-		self.multiplier = sqrt(2 / fan_in)
-
-		self.weight = nn.Parameter(weight, requires_grad=True)
-		self.bias = nn.Parameter(bias, requires_grad=True)
-
-		self.pad = padding
-
-	def forward(self, x):
-		weight = F.pad(self.weight * self.multiplier, [1, 1, 1, 1])
-		weight = (
-						 weight[:, :, 1:, 1:]
-						 + weight[:, :, :-1, 1:]
-						 + weight[:, :, 1:, :-1]
-						 + weight[:, :, :-1, :-1]
-				 ) / 4
-
-		out = F.conv2d(x, weight, self.bias, stride=2, padding=self.pad)
-
-		return out
-
-
-def pixel_norm(x):
-	return x / torch.sqrt(torch.mean(x ** 2, dim=1, keepdim=True) + 1e-8)
-
-
-class BlurFunctionBackward(Function):
-	@staticmethod
-	def forward(ctx, grad_output, kernel, kernel_flip):
-		ctx.save_for_backward(kernel, kernel_flip)
-
-		grad_input = F.conv2d(
-			grad_output, kernel_flip, padding=1, groups=grad_output.shape[1]
-		)
-
-		return grad_input
-
-	@staticmethod
-	def backward(ctx, gradgrad_output):
-		kernel, kernel_flip = ctx.saved_tensors
-
-		grad_input = F.conv2d(
-			gradgrad_output, kernel, padding=1, groups=gradgrad_output.shape[1]
-		)
-
-		return grad_input, None, None
-
-
-class BlurFunction(Function):
-	@staticmethod
-	def forward(ctx, input, kernel, kernel_flip):
-		ctx.save_for_backward(kernel, kernel_flip)
-
-		output = F.conv2d(input, kernel, padding=1, groups=input.shape[1])
-
-		return output
-
-	@staticmethod
-	def backward(ctx, grad_output):
-		kernel, kernel_flip = ctx.saved_tensors
-
-		grad_input = BlurFunctionBackward.apply(grad_output, kernel, kernel_flip)
-
-		return grad_input, None, None
-
-
-blur = BlurFunction.apply
-
-
-class Blur(nn.Module):
-	def __init__(self, channel):
-		super().__init__()
-
-		weight = torch.tensor([[1, 2, 1], [2, 4, 2], [1, 2, 1]], dtype=torch.float32)
-		weight = weight.view(1, 1, 3, 3)
-		weight = weight / weight.sum()
-		weight_flip = torch.flip(weight, [2, 3])
-
-		self.register_buffer('weight', weight.repeat(channel, 1, 1, 1))
-		self.register_buffer('weight_flip', weight_flip.repeat(channel, 1, 1, 1))
-
-	def forward(self, input):
-		return blur(input, self.weight, self.weight_flip)
-	# return F.conv2d(input, self.weight, padding=1, groups=input.shape[1])
-
-
 class EqualConv2d(nn.Module):
 	def __init__(self, *args, **kwargs):
 		super().__init__()
@@ -230,7 +107,6 @@ class ConvBlock(nn.Module):
 			kernel_size2=None,
 			padding2=None,
 			downsample=False,
-			fused=False,
 			activation_fn='lrelu'
 	):
 		super().__init__()
@@ -252,18 +128,11 @@ class ConvBlock(nn.Module):
 		)
 
 		if downsample:
-			if fused:
-				self.conv2 = nn.Sequential(
-					# Blur(out_channel),
-					FusedDownsample(out_channel, out_channel, kernel2, padding=pad2),
-				)
 
-			else:
-				self.conv2 = nn.Sequential(
-					# Blur(out_channel),
-					EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
-					nn.AvgPool2d(2),
-				)
+			self.conv2 = nn.Sequential(
+				EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
+				nn.AvgPool2d(2),
+			)
 			self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
 		else:
 			self.conv2 = nn.Sequential(
@@ -287,78 +156,6 @@ class ConvBlock(nn.Module):
 		return out
 
 
-class BNConvBlock(nn.Module):
-	def __init__(
-			self,
-			in_channel,
-			out_channel,
-			kernel_size,
-			padding,
-			kernel_size2=None,
-			padding2=None,
-			downsample=False,
-			fused=False,
-			activation_fn='lrelu',
-			split=False
-	):
-		super().__init__()
-
-		pad1 = padding
-		pad2 = padding
-		if padding2 is not None:
-			pad2 = padding2
-
-		kernel1 = kernel_size
-		kernel2 = kernel_size
-		if kernel_size2 is not None:
-			kernel2 = kernel_size2
-
-		self.conv1 = nn.Sequential(
-			EqualConv2d(in_channel, out_channel, kernel1, padding=pad1),
-		)
-
-		if downsample:
-			if fused:
-				self.conv2 = nn.Sequential(
-					Blur(out_channel),
-					FusedDownsample(out_channel, out_channel, kernel2, padding=pad2),
-
-				)
-
-			else:
-				self.conv2 = nn.Sequential(
-					Blur(out_channel),
-					EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
-					nn.AvgPool2d(2),
-
-				)
-
-		else:
-			self.conv2 = nn.Sequential(
-				EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
-
-			)
-		self.bn1 = SplitBatchNorm2d(in_channel) if split else nn.BatchNorm2d(in_channel)
-		self.bn2 = SplitBatchNorm2d(out_channel) if split else nn.BatchNorm2d(out_channel)
-		# self.skip = EqualConv2d(in_channel, out_channel, 1, stride=2, padding=0, bias=False)
-		self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
-
-	def forward(self, input, res=True):
-		out = self.conv1(input)
-
-		out = self.activation(out)
-
-		out = self.conv2(out)
-		out = self.bn2(out)
-
-		if res:
-			skip = self.skip(input)
-			out = (skip + out ) / math.sqrt(2)
-		out = self.activation(out)
-		return out
-
-
-
 class SNConvBlock(nn.Module):
 	def __init__(
 			self,
@@ -369,7 +166,6 @@ class SNConvBlock(nn.Module):
 			kernel_size2=None,
 			padding2=None,
 			downsample=False,
-			fused=False,
 			activation_fn='lrelu',
 			n_classes=10
 	):
@@ -392,17 +188,10 @@ class SNConvBlock(nn.Module):
 		)
 
 		if downsample:
-			if fused:
-				self.conv2 = nn.Sequential(
-					# Blur(out_channel),
-					FusedDownsample(out_channel, out_channel, kernel2, padding=pad2),
-				)
 
-			else:
-				self.conv2 = nn.Sequential(
-					# Blur(out_channel),
-					spectral_norm(nn.Conv2d(out_channel, out_channel, kernel2, padding=pad2)),
-					nn.AvgPool2d(2),
+			self.conv2 = nn.Sequential(
+				spectral_norm(nn.Conv2d(out_channel, out_channel, kernel2, padding=pad2)),
+				nn.AvgPool2d(2),
 				)
 			self.skip = nn.Sequential(EqualConv2d(in_channel, out_channel, 1), nn.AvgPool2d(2))
 		else:
@@ -474,7 +263,7 @@ class Attention(nn.Module):
 
 
 class EBM(nn.Module):
-	def __init__(self, base_channel=256, fused=False, spectral=False, from_rgb_activate=False, add_attention=False, res=True, projection=True,
+	def __init__(self, base_channel=256, spectral=False, from_rgb_activate=False, add_attention=False, res=True, projection=True,
 	             activation_fn='lrelu', bn=False, split=False, num_classes=10):
 		super().__init__()
 		self.attention = nn.ModuleDict()
@@ -491,13 +280,12 @@ class EBM(nn.Module):
 		if spectral:
 			self.progression = nn.ModuleDict(
 				{
-					'0': SNConvBlock(base_channel // 8, base_channel // 4, kernel_size, 1, downsample=True, fused=fused, activation_fn=activation_fn, n_classes=num_classes),
-					# 512
-					'1': SNConvBlock(base_channel // 4, base_channel // 2, kernel_size, 1, downsample=True, fused=fused, activation_fn=activation_fn, n_classes=num_classes),  # 256
+					'0': SNConvBlock(base_channel // 8, base_channel // 4, kernel_size, 1, downsample=True, activation_fn=activation_fn, n_classes=num_classes),
+					# 512activation_fn=activation_fn, n_classes=num_classes),  # 256
 
-					'2': SNConvBlock(base_channel // 2, base_channel, kernel_size, padding, downsample=True, fused=fused, activation_fn=activation_fn,
+					'2': SNConvBlock(base_channel // 2, base_channel, kernel_size, padding, downsample=True, activation_fn=activation_fn,
 					                 n_classes=num_classes),  # 128
-					'3': SNConvBlock(base_channel, base_channel * 2, kernel_size, padding, downsample=True, fused=fused, activation_fn=activation_fn, n_classes=num_classes),
+					'3': SNConvBlock(base_channel, base_channel * 2, kernel_size, padding, downsample=True, activation_fn=activation_fn, n_classes=num_classes),
 					# 64
 					'4': SNConvBlock(base_channel * 2, base_channel * 4, kernel_size, padding, downsample=True, activation_fn=activation_fn, n_classes=num_classes),  # 32
 					'5': SNConvBlock(base_channel * 4, base_channel * 4, kernel_size, padding, downsample=True, activation_fn=activation_fn, n_classes=num_classes),  # 16
@@ -510,11 +298,11 @@ class EBM(nn.Module):
 		else:
 			self.progression = nn.ModuleDict(
 				{
-					'0': ConvBlock(base_channel // 8, base_channel//4, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 512
-					'1': ConvBlock(base_channel // 4, base_channel // 2, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 256
+					'0': ConvBlock(base_channel // 8, base_channel//4, 3, 1, downsample=True, activation_fn=activation_fn),  # 512
+					'1': ConvBlock(base_channel // 4, base_channel // 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 256
 
-					'2': ConvBlock(base_channel // 2, base_channel, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 128
-					'3': ConvBlock(base_channel, base_channel * 2, 3, 1, downsample=True, fused=fused, activation_fn=activation_fn),  # 64
+					'2': ConvBlock(base_channel // 2, base_channel, 3, 1, downsample=True, activation_fn=activation_fn),  # 128
+					'3': ConvBlock(base_channel, base_channel * 2, 3, 1, downsample=True, activation_fn=activation_fn),  # 64
 					'4': ConvBlock(base_channel * 2, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 32
 					'5': ConvBlock(base_channel * 4, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 16
 					'6': ConvBlock(base_channel * 4, base_channel * 4, 3, 1, downsample=True, activation_fn=activation_fn),  # 8
