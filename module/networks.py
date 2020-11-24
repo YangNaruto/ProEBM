@@ -473,7 +473,7 @@ class Attention(nn.Module):
 		return out
 
 
-class Discriminator(nn.Module):
+class EBM(nn.Module):
 	def __init__(self, base_channel=256, fused=False, spectral=False, from_rgb_activate=False, add_attention=False, res=True, projection=True,
 	             activation_fn='lrelu', bn=False, split=False, num_classes=10):
 		super().__init__()
@@ -591,14 +591,7 @@ class Discriminator(nn.Module):
 					out = (1 - alpha) * skip_rgb + alpha * out
 
 		assert out is not None
-		# out_std = torch.sqrt(out.var(0, unbiased=False) + 1e-8)
-		# mean_std = out_std.mean()
-		# mean_std = mean_std.expand(out.size(0), 1, 4, 4)
-		# out = torch.cat([out, mean_std], 1)
-		# out_norm = self.ins_norm(out)
-		# out  = torch.cat([out, out_norm], 1)
 
-		# h = self.avgpool(out)
 		h = self.final_conv(out, res=False)
 		h = torch.flatten(h, start_dim=1)
 

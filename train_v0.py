@@ -39,13 +39,13 @@ class ProgressiveEBM(object):
 
 		num_classes = 10 if args.dataset == 'cifar10' else 1000
 
-		self.ebm = networks.Discriminator(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
+		self.ebm = networks.EBM(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
 		                                  projection=args.projection, activation_fn=args.activation_fn,
 		                                  from_rgb_activate=args.from_rgb_activate, bn=args.bn, split=args.split_bn,
 		                                  add_attention=args.attention, num_classes=num_classes).to(self.device)
 
 		# create ema model
-		self.ebm_ema = networks.Discriminator(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
+		self.ebm_ema = networks.EBM(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
 		                                  projection=args.projection, activation_fn=args.activation_fn,
 		                                  from_rgb_activate=args.from_rgb_activate, bn=args.bn, split=args.split_bn,
 		                                      add_attention=args.attention, num_classes=num_classes).to(self.device)

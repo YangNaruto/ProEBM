@@ -40,13 +40,13 @@ class ProgressiveEBM(object):
 		self.default_lr = args.lr_default
 		self.device = t.device(args.device if torch.cuda.is_available() else 'cpu')
 
-		self.ebmA = networks.Discriminator(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
+		self.ebmA = networks.EBM(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
 		                                  projection=args.projection, activation_fn=args.activation_fn,
 		                                  from_rgb_activate=args.from_rgb_activate, bn=args.bn, split=args.split_bn,
 		                                  add_attention=args.attention).to(self.device)
 		self.optimizerA = torch.optim.Adam(self.ebmA.parameters(), lr=self.default_lr, betas=(0.5, 0.999), amsgrad=args.amsgrad)
 
-		self.ebmB = networks.Discriminator(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
+		self.ebmB = networks.EBM(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
 		                                  projection=args.projection, activation_fn=args.activation_fn,
 		                                  from_rgb_activate=args.from_rgb_activate, bn=args.bn, split=args.split_bn,
 		                                  add_attention=args.attention).to(self.device)

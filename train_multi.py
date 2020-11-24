@@ -49,7 +49,7 @@ class ProgressiveEBM(object):
 
 	def create_ema(self, model, args):
 		num_classes = 10 if args.dataset == 'cifar10' else 1000
-		self.ebm_ema = networks.Discriminator(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
+		self.ebm_ema = networks.EBM(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
 		                                  projection=args.projection, activation_fn=args.activation_fn,
 		                                  from_rgb_activate=args.from_rgb_activate, bn=args.bn, split=args.split_bn,
 		                                      add_attention=args.attention, num_classes=num_classes).to(self.device)
@@ -58,7 +58,7 @@ class ProgressiveEBM(object):
 
 	def create_nets(self, n, args):
 		num_classes = 10 if args.dataset == 'cifar10' else 1000
-		self.ebm = nn.ModuleDict({str(i): networks.Discriminator(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
+		self.ebm = nn.ModuleDict({str(i): networks.EBM(base_channel=args.base_channel, spectral=args.spectral, res=args.res,
 		                                  projection=args.projection, activation_fn=args.activation_fn,
 		                                  from_rgb_activate=args.from_rgb_activate, bn=args.bn, split=args.split_bn,
 		                                  add_attention=args.attention, num_classes=num_classes).to(self.device) for i in range(1, n+1)})
